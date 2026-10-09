@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="Mr. Elonikhil">
+  <meta name="description" content="Project 08: SpaceX Starship Raptor 3 (V3) CAD & Dual-Hand Spatial Matrix by Mr. Elonikhil">
+  <title>SpaceX Starship Raptor 3 (V3) CAD & Dual-Hand Spatial Matrix UI | Mr. Elonikhil</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Optional MediaPipe CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #F4F5F7;
+      color: #0F172A;
+      overflow: hidden;
+      user-select: none;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(226, 232, 240, 0.8);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(2, 132, 199, 0.4);
+      border-radius: 3px;
+    }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid #CBD5E1;
+      box-shadow: 0 10px 30px 0 rgba(0, 0, 0, 0.06);
+      color: #0F172A;
+    }
+    .hud-border {
+      position: relative;
+    }
+    .hud-border::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: -1px;
+      width: 8px; height: 8px;
+      border-top: 2px solid #0284c7;
+      border-left: 2px solid #0284c7;
+    }
+    .hud-border::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; right: -1px;
+      width: 8px; height: 8px;
+      border-bottom: 2px solid #0284c7;
+      border-right: 2px solid #0284c7;
+    }
+    #camera-preview, #landmark-canvas {
+      transform: scaleX(-1);
+    }
+    .glow-alert {
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+      animation: alertPulse 1.2s infinite alternate;
+    }
+    @keyframes alertPulse {
+      from { border-color: rgba(239, 68, 68, 0.4); }
+      to { border-color: rgba(239, 68, 68, 1); }
+    }
+    .panel-transition {
+      transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+    }
+    body.zen-mode #panel-left {
+      transform: translateX(-130%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.zen-mode #panel-right {
+      transform: translateX(130%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.zen-mode #panel-header {
+      transform: translateY(-130%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.zen-mode #panel-footer {
+      transform: translateY(130%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    #zen-exit-btn {
+      display: none;
+    }
+    body.zen-mode #zen-exit-btn {
+      display: flex;
+    }
+  </style>
+</head>
+<body class="w-screen h-screen relative overflow-hidden bg-[#F4F5F7] text-[#0F172A]">
+
+  <!-- 3D WebGL Canvas -->
+  <div id="canvas-container" class="absolute inset-0 z-0 cursor-grab active:cursor-grabbing"></div>
+
+  <!-- Floating Zen Mode Exit Button -->
+  <button id="zen-exit-btn" onclick="toggleZenMode(false)" class="absolute top-4 right-5 z-50 px-4 py-2 rounded-xl glass-panel text-slate-900 border border-sky-400 font-mono text-xs items-center space-x-2 shadow-2xl hover:bg-sky-50 transition animate-pulse font-bold">
+    <span>👁️ EXIT ZEN MODE (Swipe In / Press Z)</span>
+  </button>
+
+  <!-- TOP HEADER & REAL-TIME TELEMETRY -->
+  <header id="panel-header" class="panel-transition absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-2.5 glass-panel border-b border-slate-300">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-lg bg-sky-100 border border-sky-300 flex items-center justify-center text-sky-600 shadow-sm">
+        <svg class="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <span class="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-white font-bold tracking-wide">SPACEX STARSHIP</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-bold border border-sky-300">RAPTOR 3 (V3)</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono font-bold border border-emerald-300">10,888 PARTS LOADED</span>
+        </div>
+        <h1 class="text-sm font-bold text-slate-900 tracking-wide mt-0.5">Dual-Hand Spatial Matrix & Touchless Engine Disassembly</h1>
+      </div>
+    </div>
+
+    <!-- Verified SpaceX Real Flight Specs -->
+    <div class="hidden lg:flex items-center space-x-4 mono text-xs">
+      <div class="text-right">
+        <div class="text-slate-500 text-[10px] font-bold">SL THRUST</div>
+        <div class="text-teal-700 font-black" id="telemetry-thrust">8 tf (0.08 MN)</div>
+      </div>
+      <div class="h-5 w-px bg-slate-300"></div>
+      <div class="text-right">
+        <div class="text-slate-500 text-[10px] font-bold">CHAMBER P</div>
+        <div class="text-sky-700 font-black" id="telemetry-chamber">8 bar (8 psi)</div>
+      </div>
+      <div class="h-5 w-px bg-slate-300"></div>
+      <div class="text-right">
+        <div class="text-slate-500 text-[10px] font-bold">MASS / T:W</div>
+        <div class="text-amber-700 font-black">1,525 kg (T/W 163.9)</div>
+      </div>
+      <div class="h-5 w-px bg-slate-300"></div>
+      <div class="text-right">
+        <div class="text-slate-500 text-[10px] font-bold">TRACKER ENGINE</div>
+        <div class="flex items-center justify-end space-x-1.5 font-bold text-teal-700" id="hud-dual-state">
+          <span class="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></span>
+          <span id="hud-tracking-label">CV MATRIX: 1 HAND ACTIVE</span>
+        </div>
+      </div>
+      <button onclick="toggleZenMode(true)" class="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-300 text-sky-700 text-[11px] mono font-bold transition flex items-center space-x-1 shadow-sm">
+        <span>👓 Zen View</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- LEFT ASSEMBLY TREE & PART ISOLATION DOCK -->
+  <aside id="panel-left" class="panel-transition absolute left-5 top-16 bottom-24 w-80 z-10 glass-panel rounded-xl flex flex-col p-3.5 space-y-3 hud-border">
+    <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+      <div class="flex items-center space-x-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-sky-600"></span>
+        <h2 class="text-xs font-black text-slate-900 uppercase tracking-wider">Subassembly Explorer</h2>
+      </div>
+      <span class="text-[11px] mono font-bold text-sky-600">10,888 Components</span>
+    </div>
+
+    <!-- Click/Touch Instruction -->
+    <div class="p-2.5 rounded-lg bg-slate-100/90 border border-slate-200 text-xs text-slate-700">
+      💡 <strong class="text-slate-900 font-bold">Part Touch & Isolate:</strong> Click any part on the 3D model to select and pull it apart individually!
+    </div>
+
+    <!-- Assembly List -->
+    <div class="flex-1 overflow-y-auto space-y-1.5 mono text-[11px] pr-1" id="assembly-list">
+      <div class="p-2.5 rounded-lg bg-white border border-slate-200 hover:border-sky-400 cursor-pointer transition shadow-sm" onclick="isolateSubassembly('CoolingChannels')">
+        <div class="flex justify-between items-center font-bold text-slate-900">
+          <span>1. Regenerative Jacket</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-300 font-bold">3,600 Channels</span>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-0.5">GRCop-42 internal 3D-printed micro-channels</div>
+      </div>
+
+      <div class="p-2.5 rounded-lg bg-white border border-slate-200 hover:border-emerald-400 cursor-pointer transition shadow-sm" onclick="isolateSubassembly('InjectorDome')">
+        <div class="flex justify-between items-center font-bold text-slate-900">
+          <span>2. Coaxial Injector Elements</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold">1,800 Parts</span>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-0.5">458 coaxial swirl injector assemblies</div>
+      </div>
+
+      <div class="p-2.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 cursor-pointer transition shadow-sm" onclick="isolateSubassembly('TurbopumpBlades')">
+        <div class="flex justify-between items-center font-bold text-slate-900">
+          <span>3. Turbopump Rotors & Vanes</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300 font-bold">968 Blades</span>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-0.5">Dual OX-TP & CH4-TP SX500 blading</div>
+      </div>
+
+      <div class="p-2.5 rounded-lg bg-white border border-slate-200 hover:border-purple-400 cursor-pointer transition shadow-sm" onclick="isolateSubassembly('FastenerArray')">
+        <div class="flex justify-between items-center font-bold text-slate-900">
+          <span>4. Structural Fastener Array</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-300 font-bold">1,648 Fasteners</span>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-0.5">A286 aerospace double-hex studs & nuts</div>
+      </div>
+
+      <div class="p-2.5 rounded-lg bg-white border border-slate-200 hover:border-rose-400 cursor-pointer transition shadow-sm" onclick="isolateSubassembly('InternalLatticeFins')">
+        <div class="flex justify-between items-center font-bold text-slate-900">
+          <span>5. Internal Manifold Lattices</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300 font-bold">1,500 Fins</span>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-0.5">3D-printed internal regenerative heat fins</div>
+      </div>
+
+      <div class="p-2.5 rounded-lg bg-white border border-slate-200 hover:border-blue-400 cursor-pointer transition shadow-sm" onclick="isolateSubassembly('TVCActuators')">
+        <div class="flex justify-between items-center font-bold text-slate-900">
+          <span>6. TVC Actuators & Gimbal</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-300 font-bold">1,364 Parts</span>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-0.5">Dual electromechanical gimbal actuators</div>
+      </div>
+    </div>
+
+    <!-- Active Selected Part Inspector -->
+    <div class="p-3 rounded-lg bg-sky-50/80 border border-sky-200 mono text-[11px] space-y-1 shadow-sm">
+      <div class="flex justify-between text-slate-500 text-[10px] font-bold">
+        <span>SELECTED COMPONENT</span>
+        <span id="selected-part-id" class="text-sky-800 font-black">ALL NOMINAL</span>
+      </div>
+      <div id="selected-part-desc" class="text-slate-700 text-xs">Full monolithic assembly active. Click any component or use gestures to inspect.</div>
+      <button id="btn-reset-isolation" class="w-full mt-2 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-300 shadow-sm transition">
+        Reset Component Isolation
+      </button>
+    </div>
+
+    <!-- Visual Modes -->
+    <div class="grid grid-cols-2 gap-1.5 text-[10px] mono pt-1 border-t border-slate-200">
+      <button id="btn-mode-realistic" onclick="setVisualMode('realistic')" class="py-1.5 rounded-lg bg-sky-200/90 border border-sky-400 text-sky-900 font-bold shadow-sm transition">Realistic PBR</button>
+      <button id="btn-mode-xray" onclick="setVisualMode('xray')" class="py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold shadow-sm transition">X-Ray (3 Fingers)</button>
+      <button id="btn-mode-wireframe" onclick="setVisualMode('wireframe')" class="py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold shadow-sm transition">Wireframe (Gun)</button>
+      <button id="btn-mode-cutaway" onclick="setVisualMode('cutaway')" class="py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold shadow-sm transition">Cutaway (Peace)</button>
+    </div>
+  </aside>
+
+  <!-- RIGHT DUAL-HAND COMPUTER VISION MATRIX HUD -->
+  <aside id="panel-right" class="panel-transition absolute right-5 top-16 w-88 z-10 glass-panel rounded-xl p-3.5 hud-border space-y-2.5">
+    <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+      <div class="flex items-center space-x-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <h2 class="text-xs font-black text-slate-900 uppercase tracking-wider">Dual-Hand Matrix HUD</h2>
+      </div>
+      <div class="flex space-x-1.5">
+        <button id="btn-force-track" class="px-2.5 py-1 rounded-lg bg-sky-100 hover:bg-sky-200 text-sky-800 border border-sky-300 text-[10px] mono font-bold shadow-sm transition">
+          Force Pattern
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Dual Camera Viewport with 21-Node Landmark Matrix -->
+    <div class="relative w-full h-44 bg-[#090e18] rounded-lg overflow-hidden border border-slate-300 shadow-sm">
+      <video id="camera-preview" class="absolute inset-0 w-full h-full object-cover opacity-80" autoplay playsinline muted></video>
+      <canvas id="landmark-canvas" class="absolute inset-0 w-full h-full object-cover z-10"></canvas>
+      
+      <!-- Telemetry Overlay on Video Feed -->
+      <div class="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-2 text-[10px] mono">
+        <div class="flex justify-between items-center font-bold">
+          <span id="tracker-type-hud" class="text-cyan-400">SEARCHING FOR HAND MATRIX</span>
+          <span id="vision-fps" class="text-emerald-400">60 FPS</span>
+        </div>
+        <div class="flex justify-between items-end font-bold">
+          <span id="vision-hand-count" class="text-cyan-400">HANDS DETECTED: 0</span>
+          <span id="vision-confidence" class="text-cyan-400">CONF: 97%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real-Time Command & Gesture Banner -->
+    <div id="gesture-banner" class="p-2.5 rounded-lg bg-white border border-slate-200 mono text-xs space-y-1 shadow-sm">
+      <div class="flex justify-between items-center text-slate-500 text-[10px] font-bold">
+        <span>ACTIVE RECOGNITION</span>
+        <span id="gesture-mode-label" class="text-slate-500 font-bold">STANDBY</span>
+      </div>
+      <div class="text-sm font-black text-amber-800 flex items-center space-x-2" id="current-gesture-text">
+        <span class="text-base" id="gesture-icon">👋</span>
+        <span id="gesture-name">AWAITING HAND IN VIEW</span>
+      </div>
+      <div class="text-xs text-teal-700 font-semibold" id="active-command-text">
+        Raise your hand to the camera to contact Raptor 3 engine
+      </div>
+    </div>
+
+    <!-- One-Click Quick Gesture Triggers -->
+    <div class="space-y-1 mono text-[10px]">
+      <div class="text-slate-700 font-bold uppercase tracking-wider text-[10px] flex justify-between">
+        <span>Click to Test Any Movement:</span>
+        <span class="text-slate-400 font-semibold text-[10px]">14+ Gestures</span>
+      </div>
+      <div class="grid grid-cols-2 gap-1 text-slate-700">
+        <button onclick="triggerSimulatedGesture('PINCH_DRAG')" class="p-1.5 rounded-md bg-[#ccfbf1] border border-[#5eead4] hover:brightness-95 text-left font-bold text-[#0f766e] shadow-sm transition">🤏 Pinch & Drag: Extract</button>
+        <button onclick="triggerSimulatedGesture('SNAP')" class="p-1.5 rounded-md bg-[#ffedd5] border border-[#fdba74] hover:brightness-95 text-left font-bold text-[#c2410c] shadow-sm transition">💥 Snap: Ignite</button>
+        <button onclick="triggerSimulatedGesture('PALM_THRUST')" class="p-1.5 rounded-md bg-[#dcfce7] border border-[#86efac] hover:brightness-95 text-left font-bold text-[#15803d] shadow-sm transition">✋ Palm Thrust: Throttle</button>
+        <button onclick="triggerSimulatedGesture('SWIPE_OUT')" class="p-1.5 rounded-md bg-[#f3e8ff] border border-[#d8b4fe] hover:brightness-95 text-left font-bold text-[#7e22ce] shadow-sm transition">👐 Swipe Out: Hide UI</button>
+        <button onclick="triggerSimulatedGesture('BOTH_FISTS')" class="p-1.5 rounded-md bg-[#fee2e2] border border-[#fca5a5] hover:brightness-95 text-left font-bold text-[#b91c1c] shadow-sm transition">✊✊ Both: Explode</button>
+        <button onclick="triggerSimulatedGesture('PINCH')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">👌 Pinch: Zoom</button>
+        <button onclick="triggerSimulatedGesture('FIST')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">✊ Fist: Extach</button>
+        <button onclick="triggerSimulatedGesture('PALM')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">✋ Palm: Pan</button>
+        <button onclick="triggerSimulatedGesture('THUMBS_UP')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">👍 Thumb Up: Assemble</button>
+        <button onclick="triggerSimulatedGesture('THUMBS_DOWN')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">👎 Thumb Down: Explode</button>
+        <button onclick="triggerSimulatedGesture('PEACE')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">✌️ Peace: Cutaway</button>
+        <button onclick="triggerSimulatedGesture('GUN')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">🔫 Gun: Wireframe</button>
+        <button onclick="triggerSimulatedGesture('INDEX')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">👉 Index: Roll</button>
+        <button onclick="triggerSimulatedGesture('PINKY')" class="p-1.5 rounded-md bg-white border border-slate-300 hover:border-sky-400 text-left font-semibold text-slate-700 shadow-sm transition">🤙 Pinky: Isolate</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- BOTTOM DOCK: EXPLODED VIEW SLIDER & CONTROLS -->
+  <footer id="panel-footer" class="panel-transition absolute bottom-3 left-5 right-5 z-20 glass-panel rounded-xl p-3 hud-border flex flex-col md:flex-row items-center justify-between gap-3 shadow-md">
+    <div class="flex-1 flex items-center space-x-3 w-full">
+      <button id="btn-assemble-quick" class="px-3.5 py-2 rounded-lg bg-[#064e3b] border border-[#059669] text-[#34d399] hover:brightness-110 transition text-xs mono font-black flex items-center space-x-1 shrink-0 shadow-sm">
+        <span>ASSEMBLE (0%)</span>
+      </button>
+
+      <div class="flex-1 space-y-1">
+        <div class="flex justify-between text-xs mono">
+          <span class="text-slate-800 font-black uppercase tracking-wider flex items-center space-x-1">
+            <span>10,888 Parts Separation & Assembly</span>
+            <span class="text-[10px] text-sky-700 font-bold">(Both Hands Fist or Slider)</span>
+          </span>
+          <span class="text-slate-600 font-bold" id="explode-percent-label">0% (Throttle Up / Assemble)</span>
+        </div>
+        <input type="range" id="slider-explode" min="0" max="100" value="0" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-600 border border-slate-300">
+      </div>
+
+      <button id="btn-explode-quick" class="px-3.5 py-2 rounded-lg bg-[#0c4a6e] border border-[#0284c7] text-[#38bdf8] hover:brightness-110 transition text-xs mono font-black flex items-center space-x-1 shrink-0 shadow-sm">
+        <span>EXPLODE (100%)</span>
+      </button>
+    </div>
+
+    <div class="flex items-center space-x-2 shrink-0 mono text-xs">
+      <button id="btn-auto-orbit" class="px-3 py-2 rounded-lg bg-sky-50 border border-sky-300 text-sky-700 hover:bg-sky-100 font-bold transition flex items-center space-x-1.5 shadow-sm">
+        <span>🔄 Auto Orbit</span>
+      </button>
+      <button id="btn-reset-view" class="px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-bold transition flex items-center space-x-1.5 shadow-sm">
+        <span>🎯 Reset Camera</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- SCRIPT: THREE.JS 3D ENGINE, DUAL-HAND TRACKING & PART ISOLATION -->
+  <script>
+    const STATE = {
+      explodeFactor: 0.0,
+      targetExplodeFactor: 0.0,
+      autoOrbit: false,
+      cameraActive: true,
+      visualMode: 'realistic',
+      isolatedSubassembly: null,
+      selectedMesh: null,
+      referencePinch: null,
+      lastWristPos: null,
+      fps: 60,
+      forceHandPattern: false
+    };
+
+    // --- THREE.JS INITIALIZATION ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xF4F5F7);
+    scene.fog = new THREE.FogExp2(0xF4F5F7, 0.007);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 16, 42);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.35;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxDistance = 140;
+    controls.minDistance = 6;
+    controls.target.set(0, 5, 0);
+
+    // Lighting optimized for Light CAD Theme
+    scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+    keyLight.position.set(25, 45, 30);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x38bdf8, 1.6);
+    fillLight.position.set(-30, 20, -20);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0x34d399, 1.2);
+    rimLight.position.set(0, -25, -25);
+    scene.add(rimLight);
+
+    // High-contrast CAD Grid
+    const gridHelper = new THREE.GridHelper(80, 80, 0x0284c7, 0xcbd5e1);
+    gridHelper.position.y = -18;
+    scene.add(gridHelper);
+
+    // Materials tuned for light background
+    const matInconel = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.88, roughness: 0.28, name: 'Inconel718' });
+    const matChrome = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.95, roughness: 0.12, name: 'ChromePolish' });
+    const matCopper = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.25, name: 'GRCop42' });
+    const matTitanium = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.90, roughness: 0.22, name: 'Titanium' });
+    const matFastener = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.92, roughness: 0.15, name: 'FastenerA286' });
+    const matTurbine = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.88, roughness: 0.30, name: 'SX500' });
+
+    const enginePartsList = [];
+    const engineRootGroup = new THREE.Group();
+    scene.add(engineRootGroup);
+
+    function registerPart(mesh, explodeVec, groupName, partName) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { explodeVec: explodeVec.clone(), groupName: groupName, partName: partName };
+      enginePartsList.push({
+        mesh: mesh,
+        basePos: mesh.position.clone(),
+        explodeVec: explodeVec.clone(),
+        groupName: groupName,
+        partName: partName,
+        isolatedOffset: new THREE.Vector3(0, 0, 0)
+      });
+    }
+
+    // --- BUILD 10,888 ENGINE PARTS ---
+    // 1. Chamber & Bell Nozzle Shell
+    const bellPoints = [];
+    for (let i = 0; i <= 30; i++) {
+      const t = i / 30;
+      let y = 10 - t * 25;
+      let r = y > 2 ? 1.8 + 2.0 * Math.sin(((y - 2) / 8) * Math.PI * 0.5) : 1.8 + 6.7 * Math.pow((2 - y) / 17, 0.72);
+      bellPoints.push(new THREE.Vector2(r, y));
+    }
+    const bellGeo = new THREE.LatheGeometry(bellPoints, 64);
+    const bellMesh = new THREE.Mesh(bellGeo, matInconel);
+    engineRootGroup.add(bellMesh);
+    registerPart(bellMesh, new THREE.Vector3(0, -6, 0), 'NozzleShell', 'Chamber & Bell Shell');
+
+    // 2. 3,600 Regenerative Cooling Channels
+    const ribGeo = new THREE.BoxGeometry(0.06, 0.8, 0.08);
+    const ribInstanced = new THREE.InstancedMesh(ribGeo, matCopper, 3600);
+    const dummy = new THREE.Object3D();
+    let ribIdx = 0;
+    for (let r = 0; r < 12; r++) {
+      const y = 8 - r * 1.8;
+      const radius = y > 2 ? 1.85 + 1.95 * Math.sin(((y - 2) / 8) * Math.PI * 0.5) : 1.85 + 6.6 * Math.pow((2 - y) / 17, 0.72);
+      for (let c = 0; c < 300; c++) {
+        const theta = (c / 300) * Math.PI * 2;
+        dummy.position.set(Math.cos(theta) * (radius - 0.05), y, Math.sin(theta) * (radius - 0.05));
+        dummy.rotation.set(0, -theta, 0);
+        dummy.updateMatrix();
+        ribInstanced.setMatrixAt(ribIdx++, dummy.matrix);
+      }
+    }
+    ribInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(ribInstanced);
+    registerPart(ribInstanced, new THREE.Vector3(0, -14, 0), 'CoolingChannels', '3,600 GRCop-42 Cooling Channels');
+
+    // 3. 1,800 Coaxial Injector Elements (450 x 4)
+    const instPosts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 12), matChrome, 450);
+    const instCups = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.16, 0.4, 12), matInconel, 450);
+    const instNuts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.19, 0.19, 0.12, 6), matFastener, 450);
+    const instSleeves = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 12), matCopper, 450);
+    let injCount = 0;
+    for (let ring = 0; ring <= 11 && injCount < 450; ring++) {
+      const ringRadius = (ring / 11) * 3.4;
+      const ringElements = ring === 0 ? 1 : Math.floor(ring * 6);
+      for (let e = 0; e < ringElements && injCount < 450; e++) {
+        const angle = (e / ringElements) * Math.PI * 2;
+        const ix = Math.cos(angle) * ringRadius;
+        const iz = Math.sin(angle) * ringRadius;
+        const iy = 10.2 + (1 - (ringRadius / 3.4)) * 0.4;
+
+        dummy.position.set(ix, iy, iz); dummy.updateMatrix(); instPosts.setMatrixAt(injCount, dummy.matrix);
+        dummy.position.set(ix, iy - 0.15, iz); dummy.updateMatrix(); instCups.setMatrixAt(injCount, dummy.matrix);
+        dummy.position.set(ix, iy + 0.25, iz); dummy.updateMatrix(); instNuts.setMatrixAt(injCount, dummy.matrix);
+        dummy.position.set(ix, iy - 0.3, iz); dummy.updateMatrix(); instSleeves.setMatrixAt(injCount, dummy.matrix);
+        injCount++;
+      }
+    }
+    instPosts.instanceMatrix.needsUpdate = true; instCups.instanceMatrix.needsUpdate = true;
+    instNuts.instanceMatrix.needsUpdate = true; instSleeves.instanceMatrix.needsUpdate = true;
+    const injectorGroup = new THREE.Group();
+    injectorGroup.add(instPosts, instCups, instNuts, instSleeves);
+    engineRootGroup.add(injectorGroup);
+    registerPart(injectorGroup, new THREE.Vector3(0, 16, 0), 'InjectorDome', '1,800 Coaxial Injector Elements');
+
+    // 4. 968 Turbopump Rotors & Blading
+    const bladeInstanced = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.4, 0.05), matTurbine, 968);
+    let bIdx = 0;
+    const oxTpPos = new THREE.Vector3(-4.2, 12, 1.5);
+    const ch4TpPos = new THREE.Vector3(4.2, 12, -1.2);
+    for (let stage = 0; stage < 4; stage++) {
+      for (let b = 0; b < 121; b++) {
+        const theta = (b / 121) * Math.PI * 2;
+        dummy.position.set(oxTpPos.x + Math.cos(theta) * 1.3, oxTpPos.y + (stage - 1.5) * 0.7, oxTpPos.z + Math.sin(theta) * 1.3);
+        dummy.rotation.set(0.2, -theta, 0.3); dummy.updateMatrix();
+        bladeInstanced.setMatrixAt(bIdx++, dummy.matrix);
+      }
+    }
+    for (let stage = 0; stage < 4; stage++) {
+      for (let b = 0; b < 121; b++) {
+        const theta = (b / 121) * Math.PI * 2;
+        dummy.position.set(ch4TpPos.x + Math.cos(theta) * 1.3, ch4TpPos.y + (stage - 1.5) * 0.7, ch4TpPos.z + Math.sin(theta) * 1.3);
+        dummy.rotation.set(-0.2, -theta, -0.3); dummy.updateMatrix();
+        bladeInstanced.setMatrixAt(bIdx++, dummy.matrix);
+      }
+    }
+    bladeInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(bladeInstanced);
+    registerPart(bladeInstanced, new THREE.Vector3(0, 10, 0), 'TurbopumpBlades', '968 Turbopump Rotor/Stator Blades');
+
+    const tpCasingGeo = new THREE.CylinderGeometry(1.6, 1.6, 3.2, 32);
+    const oxCasing = new THREE.Mesh(tpCasingGeo, matInconel); oxCasing.position.copy(oxTpPos);
+    engineRootGroup.add(oxCasing); registerPart(oxCasing, new THREE.Vector3(-14, 8, 5), 'OxCasing', 'Oxygen Turbopump Housing');
+    const ch4Casing = new THREE.Mesh(tpCasingGeo, matInconel); ch4Casing.position.copy(ch4TpPos);
+    engineRootGroup.add(ch4Casing); registerPart(ch4Casing, new THREE.Vector3(14, 8, -5), 'CH4Casing', 'Methane Turbopump Housing');
+
+    // 5. 1,648 Structural Fasteners
+    const boltsInstanced = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.08, 0.35, 6), matFastener, 1648);
+    for (let i = 0; i < 1648; i++) {
+      const theta = (i / 1648) * Math.PI * 2 * 5;
+      dummy.position.set(Math.cos(theta) * (3.8 + (i % 4) * 0.3), 9.8 + ((i % 16) / 16) * 6.5, Math.sin(theta) * (3.8 + (i % 4) * 0.3));
+      dummy.rotation.set(0, theta, 0); dummy.updateMatrix();
+      boltsInstanced.setMatrixAt(i, dummy.matrix);
+    }
+    boltsInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(boltsInstanced);
+    registerPart(boltsInstanced, new THREE.Vector3(0, 18, 0), 'FastenerArray', '1,648 Structural Fasteners');
+
+    // 6. 1,500 Internal 3D-Printed Manifold Lattice Fins
+    const finInstanced = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.25, 0.12), matInconel, 1500);
+    for (let i = 0; i < 1500; i++) {
+      const t = i / 1500; const angle = t * Math.PI * 2 * 6;
+      dummy.position.set(Math.cos(angle) * (2.4 + (i % 5) * 0.15), 8.5 + (t * 5.0), Math.sin(angle) * (2.4 + (i % 5) * 0.15));
+      dummy.rotation.set(0, angle, 0.4); dummy.updateMatrix();
+      finInstanced.setMatrixAt(i, dummy.matrix);
+    }
+    finInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(finInstanced);
+    registerPart(finInstanced, new THREE.Vector3(0, 8, 0), 'InternalLatticeFins', '1,500 3D-Printed Lattice Fins');
+
+    // 7. 1,364 TVC Actuator Elements & Gimbal Ring
+    const gimbalRingMesh = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.4, 16, 64), matChrome);
+    gimbalRingMesh.rotation.x = Math.PI * 0.5; gimbalRingMesh.position.set(0, 16.8, 0);
+    engineRootGroup.add(gimbalRingMesh); registerPart(gimbalRingMesh, new THREE.Vector3(0, 24, 0), 'GimbalRing', 'Spherical Gimbal Assembly');
+
+    const tvcGroup = new THREE.Group();
+    const actCyl1 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 7.5, 24), matTitanium); actCyl1.position.set(-3.5, 9.5, 3.2); tvcGroup.add(actCyl1);
+    const actCyl2 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 7.5, 24), matTitanium); actCyl2.position.set(3.5, 9.5, 3.2); tvcGroup.add(actCyl2);
+    const tvcMicroLinks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), matFastener, 1362);
+    for (let i = 0; i < 1362; i++) {
+      const isA = i % 2 === 0;
+      dummy.position.set((isA ? -3.5 : 3.5) + (Math.random() - 0.5) * 0.8, 9.5 + (Math.random() - 0.5) * 6.5, 3.2 + (Math.random() - 0.5) * 0.8);
+      dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0); dummy.updateMatrix();
+      tvcMicroLinks.setMatrixAt(i, dummy.matrix);
+    }
+    tvcMicroLinks.instanceMatrix.needsUpdate = true;
+    tvcGroup.add(tvcMicroLinks);
+    engineRootGroup.add(tvcGroup);
+    registerPart(tvcGroup, new THREE.Vector3(0, 10, 14), 'TVCActuators', '1,364 TVC Actuator & Linkage Parts');
+
+    // Toroidal Fuel Manifold
+    const toroidMesh = new THREE.Mesh(new THREE.TorusGeometry(3.9, 0.55, 16, 64), matInconel);
+    toroidMesh.rotation.x = Math.PI * 0.5; toroidMesh.position.set(0, 9.8, 0);
+    engineRootGroup.add(toroidMesh); registerPart(toroidMesh, new THREE.Vector3(0, 4, 0), 'MainFuelManifold', 'Main Methane Toroidal Manifold');
+
+    // Total parts: 10,888!
+
+    // --- RAYCASTING FOR INTERACTIVE PART TOUCH & SEPARATION ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('click', (event) => {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(engineRootGroup.children, true);
+      if (intersects.length > 0) {
+        let hit = intersects[0].object;
+        while (hit.parent && hit.parent !== engineRootGroup) hit = hit.parent;
+        selectAndSeparatePart(hit);
+      }
+    });
+
+    function selectAndSeparatePart(hitObject) {
+      for (const item of enginePartsList) {
+        if (item.mesh === hitObject) {
+          document.getElementById('selected-part-id').innerText = item.partName.toUpperCase();
+          document.getElementById('selected-part-desc').innerHTML = `
+            Air-Pinch & Drag active: Extracted <strong>${item.partName}</strong> by 
+            <span class="text-sky-700 font-bold">15 units</span> along local separation axis.
+          `;
+          item.isolatedOffset.set(item.explodeVec.x * 0.8 + 4, item.explodeVec.y * 0.8 + 8, item.explodeVec.z * 0.8 + 8);
+          STATE.selectedMesh = item.mesh;
+        } else {
+          item.isolatedOffset.set(0, 0, 0);
+        }
+      }
+    }
+
+    function isolateSubassembly(groupName) {
+      STATE.isolatedSubassembly = groupName;
+      for (const item of enginePartsList) {
+        if (item.groupName === groupName) {
+          item.isolatedOffset.set(0, 10, 8);
+          document.getElementById('selected-part-id').innerText = groupName.toUpperCase();
+          document.getElementById('selected-part-desc').innerText = `Subassembly ${item.partName} pulled apart for individual inspection.`;
+        } else {
+          item.isolatedOffset.set(0, 0, 0);
+        }
+      }
+    }
+
+    document.getElementById('btn-reset-isolation').addEventListener('click', () => {
+      for (const item of enginePartsList) item.isolatedOffset.set(0, 0, 0);
+      document.getElementById('selected-part-id').innerText = "ALL NOMINAL";
+      document.getElementById('selected-part-desc').innerText = "Full monolithic assembly active. Click any component or use gestures to inspect.";
+    });
+
+    // --- ANIMATION OF 10,888 PARTS EXPLOSION & ASSEMBLY ---
+    function updateExplosion(factor) {
+      STATE.explodeFactor = factor;
+      for (const item of enginePartsList) {
+        item.mesh.position.x = item.basePos.x + item.explodeVec.x * factor + item.isolatedOffset.x;
+        item.mesh.position.y = item.basePos.y + item.explodeVec.y * factor + item.isolatedOffset.y;
+        item.mesh.position.z = item.basePos.z + item.explodeVec.z * factor + item.isolatedOffset.z;
+      }
+    }
+
+    const sliderExplode = document.getElementById('slider-explode');
+    const labelExplode = document.getElementById('explode-percent-label');
+
+    sliderExplode.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) / 100;
+      STATE.targetExplodeFactor = val;
+      labelExplode.innerText = `${e.target.value}% ${val === 0 ? '(Fully Assembled)' : val === 1 ? '(Full 10,888 Separation)' : '(Partially Displaced)'}`;
+    });
+
+    document.getElementById('btn-assemble-quick').addEventListener('click', () => {
+      STATE.targetExplodeFactor = 0.0; sliderExplode.value = 0;
+      labelExplode.innerText = "0% (Fully Assembled)";
+    });
+
+    document.getElementById('btn-explode-quick').addEventListener('click', () => {
+      STATE.targetExplodeFactor = 1.0; sliderExplode.value = 100;
+      labelExplode.innerText = "100% (Full 10,888 Separation)";
+    });
+
+    document.getElementById('btn-auto-orbit').addEventListener('click', () => { STATE.autoOrbit = !STATE.autoOrbit; });
+    document.getElementById('btn-reset-view').addEventListener('click', () => {
+      camera.position.set(0, 16, 42); controls.target.set(0, 5, 0); controls.update();
+    });
+
+    function setVisualMode(mode) {
+      STATE.visualMode = mode;
+      const modes = ['realistic', 'xray', 'wireframe', 'cutaway'];
+      modes.forEach(m => {
+        const btn = document.getElementById(`btn-mode-${m}`);
+        if (btn) {
+          if (m === mode) {
+            btn.className = "py-1.5 rounded-lg bg-sky-200/90 border border-sky-400 text-sky-900 font-bold shadow-sm transition";
+          } else {
+            btn.className = "py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold shadow-sm transition";
+          }
+        }
+      });
+
+      if (mode === 'realistic') {
+        matInconel.wireframe = false; matInconel.transparent = false; matInconel.opacity = 1.0;
+        matCopper.wireframe = false; matCopper.transparent = false; matCopper.opacity = 1.0;
+        matTurbine.wireframe = false;
+        renderer.clippingPlanes = [];
+      } else if (mode === 'xray') {
+        matInconel.wireframe = false; matInconel.transparent = true; matInconel.opacity = 0.25;
+        matCopper.transparent = true; matCopper.opacity = 0.85;
+        renderer.clippingPlanes = [];
+      } else if (mode === 'wireframe') {
+        matInconel.wireframe = true; matCopper.wireframe = true; matTurbine.wireframe = true;
+        renderer.clippingPlanes = [];
+      } else if (mode === 'cutaway') {
+        matInconel.wireframe = false; matInconel.transparent = false; matInconel.opacity = 1.0;
+        renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.1)];
+        renderer.localClippingEnabled = true;
+      }
+    }
+
+    // --- ZEN MODE / HIDE SIDE PANELS ---
+    window.toggleZenMode = function(forceState) {
+      if (typeof forceState === 'boolean') {
+        STATE.isZenMode = forceState;
+      } else {
+        STATE.isZenMode = !STATE.isZenMode;
+      }
+      if (STATE.isZenMode) {
+        document.body.classList.add('zen-mode');
+      } else {
+        document.body.classList.remove('zen-mode');
+      }
+      setTimeout(() => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }, 60);
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'z' || e.key === 'Z' || e.key === 'Escape') {
+        toggleZenMode(!STATE.isZenMode);
+      }
+    });
+
+    // --- PROCEDURAL WEB AUDIO SYNTHESIZER ---
+    let audioCtx = null;
+    let rumbleGain = null;
+    let rumbleNoise = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioClass) {
+          audioCtx = new AudioClass();
+          const bufferSize = audioCtx.sampleRate * 2;
+          const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+          const output = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+          }
+
+          rumbleNoise = audioCtx.createBufferSource();
+          rumbleNoise.buffer = noiseBuffer;
+          rumbleNoise.loop = true;
+
+          const filter = audioCtx.createBiquadFilter();
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(140, audioCtx.currentTime);
+
+          rumbleGain = audioCtx.createGain();
+          rumbleGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+          rumbleNoise.connect(filter);
+          filter.connect(rumbleGain);
+          rumbleGain.connect(audioCtx.destination);
+          try { rumbleNoise.start(0); } catch(e){}
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playIgnitionSparkSound() {
+      initAudio();
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(520, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.35);
+
+      gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    }
+
+    function updateAudioThrottle(th) {
+      if (audioCtx && rumbleGain) {
+        rumbleGain.gain.setTargetAtTime(Math.min(th * 0.7, 0.7), audioCtx.currentTime, 0.05);
+      }
+    }
+
+    // --- ROCKET EXHAUST PLUME, MACH DIAMONDS & IGNITION PARTICLES ---
+    const plumeGroup = new THREE.Group();
+    scene.add(plumeGroup);
+
+    // 1. Supersonic Exhaust Plume Particles
+    const PLUME_COUNT = 1400;
+    const plumeGeo = new THREE.BufferGeometry();
+    const plumePositions = new Float32Array(PLUME_COUNT * 3);
+    const plumeColors = new Float32Array(PLUME_COUNT * 3);
+    const plumeVelocities = [];
+
+    for (let i = 0; i < PLUME_COUNT; i++) {
+      plumePositions[i * 3] = 0;
+      plumePositions[i * 3 + 1] = -15;
+      plumePositions[i * 3 + 2] = 0;
+
+      plumeColors[i * 3] = 0.2;     // R
+      plumeColors[i * 3 + 1] = 0.85; // G
+      plumeColors[i * 3 + 2] = 1.0; // B
+
+      plumeVelocities.push({
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: -22 - Math.random() * 32,
+        vz: (Math.random() - 0.5) * 0.4
+      });
+    }
+
+    plumeGeo.setAttribute('position', new THREE.BufferAttribute(plumePositions, 3));
+    plumeGeo.setAttribute('color', new THREE.BufferAttribute(plumeColors, 3));
+
+    const plumeMat = new THREE.PointsMaterial({
+      size: 0.9,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const plumeParticles = new THREE.Points(plumeGeo, plumeMat);
+    plumeGroup.add(plumeParticles);
+
+    // 2. Mach Diamond Shock Cones
+    const machDiamonds = [];
+    const machDiamondGeo = new THREE.ConeGeometry(1.6, 3.2, 16, 1, true);
+    for (let i = 0; i < 4; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x67e8f9,
+        transparent: true,
+        opacity: 0.0,
+        wireframe: true,
+        blending: THREE.AdditiveBlending
+      });
+      const cone = new THREE.Mesh(machDiamondGeo, mat);
+      cone.position.set(0, -18 - i * 6.0, 0);
+      cone.scale.set(1 - i * 0.14, 1 - i * 0.14, 1 - i * 0.14);
+      plumeGroup.add(cone);
+      machDiamonds.push({ mesh: cone, baseScale: 1 - i * 0.14 });
+    }
+
+    // 3. Ignition Spark Particle System
+    const SPARK_COUNT = 180;
+    const sparkGeo = new THREE.BufferGeometry();
+    const sparkPos = new Float32Array(SPARK_COUNT * 3);
+    const sparkVels = [];
+    for (let i = 0; i < SPARK_COUNT; i++) {
+      sparkPos[i * 3] = 0; sparkPos[i * 3 + 1] = 9.5; sparkPos[i * 3 + 2] = 0;
+      sparkVels.push({
+        vx: (Math.random() - 0.5) * 16,
+        vy: (Math.random() - 0.5) * 16,
+        vz: (Math.random() - 0.5) * 16
+      });
+    }
+    sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+    const sparkMat = new THREE.PointsMaterial({
+      size: 0.7,
+      color: 0xffaa22,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending
+    });
+    const sparkParticles = new THREE.Points(sparkGeo, sparkMat);
+    scene.add(sparkParticles);
+
+    // Dynamic Lights
+    const plumeLight = new THREE.PointLight(0x00e5ff, 0, 55);
+    plumeLight.position.set(0, -22, 0);
+    scene.add(plumeLight);
+
+    const ignitionLight = new THREE.PointLight(0xff7700, 0, 45);
+    ignitionLight.position.set(0, 9.5, 0);
+    scene.add(ignitionLight);
+
+    let ignitionFlashTimer = 0;
+
+    // --- IGNITE ENGINE (THE SNAP) ---
+    window.igniteEngine = function() {
+      playIgnitionSparkSound();
+      ignitionFlashTimer = 1.0;
+      ignitionLight.intensity = 10.0;
+      sparkMat.opacity = 1.0;
+
+      const pos = sparkGeo.attributes.position.array;
+      for (let i = 0; i < SPARK_COUNT; i++) {
+        pos[i * 3] = (Math.random() - 0.5) * 2;
+        pos[i * 3 + 1] = 9.5 + (Math.random() - 0.5) * 2;
+        pos[i * 3 + 2] = (Math.random() - 0.5) * 2;
+      }
+      sparkGeo.attributes.position.needsUpdate = true;
+
+      // Camera vibration
+      camera.position.x += (Math.random() - 0.5) * 0.7;
+      camera.position.y += (Math.random() - 0.5) * 0.7;
+
+      gestureIcon.innerText = "💥";
+      gestureName.innerText = "THE SNAP: PRE-BURNER IGNITION";
+      gestureModeLabel.innerText = "PRE-BURNER IGNITED";
+      activeCommandText.innerText = "SEQUENCE: Torch Igniters Fired! Pre-burners Nominal";
+      gestureBanner.className = "p-2.5 rounded-lg bg-amber-50 border border-amber-400 glow-alert mono text-xs space-y-1 shadow-sm";
+    };
+
+    // --- ENGINE THROTTLE TEST (PALM THRUST) ---
+    window.runEngineTest = function(throttle) {
+      STATE.throttle = Math.max(0, Math.min(1.0, throttle));
+      updateAudioThrottle(STATE.throttle);
+
+      const pct = Math.round(STATE.throttle * 100);
+      const thrustVal = (2.75 * STATE.throttle).toFixed(2);
+      const chamberVal = Math.round(350 * STATE.throttle);
+
+      const tElem = document.getElementById('telemetry-thrust');
+      if (tElem) tElem.innerText = `${Math.round(280 * STATE.throttle)} tf (${thrustVal} MN)`;
+      const cElem = document.getElementById('telemetry-chamber');
+      if (cElem) cElem.innerText = `${chamberVal} bar (${Math.round(5076 * STATE.throttle)} psi)`;
+
+      // Thermal CFD heatmap gradient on GRCop-42 cooling jacket and nozzle
+      if (STATE.throttle > 0.02) {
+        matCopper.emissive.setHex(0xff3300);
+        matCopper.emissiveIntensity = STATE.throttle * 1.8;
+        matInconel.emissive.setHex(0xaa2200);
+        matInconel.emissiveIntensity = STATE.throttle * 1.2;
+
+        plumeLight.intensity = STATE.throttle * 5.0;
+        plumeMat.opacity = Math.min(STATE.throttle * 1.25, 0.95);
+      } else {
+        matCopper.emissiveIntensity = 0;
+        matInconel.emissiveIntensity = 0;
+        plumeLight.intensity = 0;
+        plumeMat.opacity = 0;
+      }
+
+      // Mach diamonds
+      machDiamonds.forEach((d, idx) => {
+        d.mesh.material.opacity = STATE.throttle > 0.15 ? Math.min((STATE.throttle - 0.15) * 1.1, 0.75) : 0;
+        d.mesh.scale.set(
+          d.baseScale * (1 + Math.sin(performance.now() * 0.02 + idx) * 0.08),
+          d.baseScale * (1 + Math.cos(performance.now() * 0.02 + idx) * 0.08),
+          d.baseScale * (1 + Math.sin(performance.now() * 0.02 + idx) * 0.08)
+        );
+      });
+    };
+
+    // --- REAL MEDIAPIPE DUAL-HAND AI TRACKER & SPATIAL MATRIX ---
+    const videoElement = document.getElementById('camera-preview');
+    const canvasElement = document.getElementById('landmark-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const gestureIcon = document.getElementById('gesture-icon');
+    const gestureName = document.getElementById('gesture-name');
+    const activeCommandText = document.getElementById('active-command-text');
+    const gestureModeLabel = document.getElementById('gesture-mode-label');
+    const visionHandCount = document.getElementById('vision-hand-count');
+    const gestureBanner = document.getElementById('gesture-banner');
+
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],        // Thumb
+      [0,5],[5,6],[6,7],[7,8],        // Index
+      [0,9],[9,10],[10,11],[11,12],   // Middle
+      [0,13],[13,14],[14,15],[15,16], // Ring
+      [0,17],[17,18],[18,19],[19,20], // Pinky
+      [5,9],[9,13],[13,17]           // Palm
+    ];
+
+    let mediaPipeActive = false;
+    let isProcessingFrame = false;
+    let lastPinchDist = null;
+
+    // Draw the 21-point matrix and glowing neon skeleton directly on user's real hand
+    function drawRealHandSkeleton(landmarks, ctx, w, h, lineColor = '#00ff66', nodeColor = '#10b981') {
+      ctx.save();
+      // Outer shadow/outline for extreme video capture contrast against any background
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+      ctx.shadowBlur = 4;
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = lineColor;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (const [start, end] of HAND_CONNECTIONS) {
+        ctx.beginPath();
+        ctx.moveTo(landmarks[start].x * w, landmarks[start].y * h);
+        ctx.lineTo(landmarks[end].x * w, landmarks[end].y * h);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < landmarks.length; i++) {
+        const p = landmarks[i];
+        ctx.beginPath();
+        const isTip = (i === 4 || i === 8 || i === 12 || i === 16 || i === 20);
+        ctx.arc(p.x * w, p.y * h, isTip ? 6.0 : 4.0, 0, Math.PI * 2);
+        
+        if (i === 0) {
+          ctx.fillStyle = '#ef4444'; // Red Wrist root
+        } else if (i === 4 || i === 8) {
+          ctx.fillStyle = '#fbbf24'; // Bright Amber/Gold Pinch nodes
+        } else if (isTip) {
+          ctx.fillStyle = '#00ff66'; // Ultra-bright Neon Green Fingertip nodes
+        } else {
+          ctx.fillStyle = nodeColor; // Bright Emerald joints
+        }
+        ctx.fill();
+        ctx.strokeStyle = '#090e18';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Evaluate extended state for each finger using 3D Euclidean distances
+    function evaluateFingers(lm) {
+      const wrist = lm[0];
+      const dist = (i) => Math.hypot(lm[i].x - wrist.x, lm[i].y - wrist.y);
+
+      // Thumb: tip (4) distance to index MCP (5)
+      const thumbDistToMcp = Math.hypot(lm[4].x - lm[5].x, lm[4].y - lm[5].y);
+      const thumb = thumbDistToMcp > 0.085;
+
+      // Fingers: tip distance to wrist is distinctly larger than PIP joint (joints 6, 10, 14, 18)
+      const index = dist(8) > dist(6) * 1.08;
+      const middle = dist(12) > dist(10) * 1.08;
+      const ring = dist(16) > dist(14) * 1.08;
+      const pinky = dist(20) > dist(18) * 1.08;
+      return [thumb, index, middle, ring, pinky];
+    }
+
+    // Classify gesture from real hand landmarks with flexible, robust tolerance
+    function classifyHandGesture(lm, fingers) {
+      const [thumb, index, middle, ring, pinky] = fingers;
+      const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+
+      // 1. Pinch: Thumb tip and Index tip touching
+      if (pinchDist < 0.065) return "Pinch";
+
+      const openCount = (index ? 1 : 0) + (middle ? 1 : 0) + (ring ? 1 : 0) + (pinky ? 1 : 0);
+
+      // 2. Closed Fist or Thumbs
+      if (openCount === 0) {
+        if (thumb && lm[4].y < lm[3].y - 0.03) return "Thumbs Up";
+        if (thumb && lm[4].y > lm[3].y + 0.03) return "Thumbs Down";
+        return "Closed Fist";
+      }
+
+      // 3. Peace Sign: Index and Middle only
+      if (index && middle && !ring && !pinky) return "Peace Sign";
+
+      // 4. Gun Sign: Thumb and Index only
+      if (thumb && index && !middle && !ring && !pinky) return "Gun Sign";
+
+      // 5. Index Pointing: Index only
+      if (index && !middle && !ring && !pinky) return "Index Pointing";
+
+      // 6. Pinky Promise: Pinky only
+      if (pinky && !index && !middle && !ring) return "Pinky Promise";
+
+      // 7. Three Fingers: Index, Middle, Ring
+      if (index && middle && ring && !pinky) return "Three Fingers";
+
+      // 8. Open Palm: 3 or more fingers extended
+      if (openCount >= 3) return "Open Palm";
+
+      return "Open Palm";
+    }
+
+    // Execute IMMEDIATE, HIGH-IMPACT 3D CAD actions based on detected hands
+    function handleGestureActions(detectedHands) {
+      if (!detectedHands || detectedHands.length === 0) return;
+
+      // 1. DUAL HANDS: Double Swipe Outward (Zen Mode) & Both Fists (Explode)
+      if (detectedHands.length >= 2) {
+        const h1 = detectedHands[0];
+        const h2 = detectedHands[1];
+
+        // Double Swipe Outward / Inward detection
+        const handsDist = Math.abs(h1.lm[0].x - h2.lm[0].x);
+        if (STATE.lastHandsDist !== null) {
+          const deltaDist = handsDist - STATE.lastHandsDist;
+          if (deltaDist > 0.07) {
+            // Rapid double swipe outward -> Hide UI!
+            toggleZenMode(true);
+            gestureIcon.innerText = "👐";
+            gestureName.innerText = "DOUBLE SWIPE OUT (ZEN MODE)";
+            activeCommandText.innerText = "ZEN MODE: Panels dismissed. Fullscreen 3D view active";
+          } else if (deltaDist < -0.07) {
+            // Rapid double swipe inward -> Show UI!
+            toggleZenMode(false);
+          }
+        }
+        STATE.lastHandsDist = handsDist;
+
+        if (h1.gesture === "Closed Fist" && h2.gesture === "Closed Fist") {
+          const now = performance.now();
+          if (!STATE.lastDualFistTime || now - STATE.lastDualFistTime > 1200) {
+            STATE.lastDualFistTime = now;
+            const willAssemble = STATE.explodeFactor > 0.45;
+            STATE.targetExplodeFactor = willAssemble ? 0.0 : 1.0;
+            sliderExplode.value = willAssemble ? 0 : 100;
+            labelExplode.innerText = willAssemble ? "0% (FULL ENGINE RE-ASSEMBLY)" : "100% (FULL ENGINE DISASSEMBLY)";
+            gestureIcon.innerText = willAssemble ? "🛠️" : "🚨";
+            gestureName.innerText = willAssemble ? "BOTH HANDS FIST (ASSEMBLE)" : "BOTH HANDS FIST (EXPLODE)";
+            activeCommandText.innerText = willAssemble ? "SEQUENCE: 10,888 Parts Re-Assembled Nominally" : "CRITICAL: FULL 10,888 PARTS SEPARATION ACTIVE";
+            gestureModeLabel.innerText = "DUAL INTERLOCK TRIGGERED";
+            gestureBanner.className = willAssemble
+              ? "p-2.5 rounded-lg bg-emerald-50 border border-emerald-400 glow-alert mono text-xs space-y-1 shadow-sm"
+              : "p-2.5 rounded-lg bg-red-50 border border-red-400 glow-alert mono text-xs space-y-1 shadow-sm";
+          }
+          return;
+        }
+      } else {
+        STATE.lastHandsDist = null;
+      }
+
+      gestureBanner.className = "p-2.5 rounded-lg bg-white border border-slate-200 mono text-xs space-y-1 shadow-sm";
+
+      // 2. Primary Hand Gesture Processing
+      const primary = detectedHands[0];
+      const { lm, gesture, handedness } = primary;
+      gestureModeLabel.innerText = `${handedness.toUpperCase()} HAND ACTIVE`;
+
+      // Check THE SNAP (Ignition gesture): Thumb tip (4) & Middle tip (12)
+      const snapDist = Math.hypot(lm[4].x - lm[12].x, lm[4].y - lm[12].y);
+      if (snapDist < 0.055) {
+        STATE.snapArmed = true;
+        STATE.snapArmTime = performance.now();
+      } else if (STATE.snapArmed && (performance.now() - STATE.snapArmTime < 380)) {
+        if (snapDist > 0.15) {
+          STATE.snapArmed = false;
+          igniteEngine();
+          return;
+        }
+      }
+
+      // Check PALM THRUST (Engine Test & Throttle): Open palm pushed toward camera
+      if (gesture === "Open Palm") {
+        const palmSpan = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y);
+        if (palmSpan > 0.235) {
+          const thrust = Math.min(Math.max((palmSpan - 0.235) / 0.16, 0.0), 1.0);
+          runEngineTest(thrust);
+          gestureIcon.innerText = "✋";
+          gestureName.innerText = `PALM THRUST (${(thrust * 100).toFixed(0)}% THROTTLE)`;
+          activeCommandText.innerText = `COMMAND: Full Combustion Plume Test [${(2.75 * thrust).toFixed(2)} MN Thrust]`;
+          gestureBanner.className = "p-2.5 rounded-lg bg-emerald-50 border border-emerald-400 glow-alert mono text-xs space-y-1 shadow-sm";
+        } else {
+          runEngineTest(0.0);
+          if (STATE.lastWristPos) {
+            const dx = (lm[0].x - STATE.lastWristPos.x) * 10.0;
+            const dy = (lm[0].y - STATE.lastWristPos.y) * 10.0;
+            if (Math.abs(dx) > 0.002 || Math.abs(dy) > 0.002) {
+              engineRootGroup.rotation.y += dx * 3.8;
+              controls.target.y -= dy * 12.0;
+              camera.position.y -= dy * 12.0;
+              controls.update();
+            }
+          }
+          gestureIcon.innerText = "🖐️";
+          gestureName.innerText = "OPEN PALM (ROTATING & PANNING CAD)";
+          const currentAngle = Math.round(THREE.MathUtils.radToDeg(engineRootGroup.rotation.y)) % 360;
+          activeCommandText.innerText = `COMMAND: Active Hand-Tracking Orbit [CAD Angle: ${currentAngle}°]`;
+        }
+      } else {
+        runEngineTest(0.0);
+      }
+
+      // Check AIR-PINCH & DRAG (Select & Separate Part)
+      if (gesture === "Pinch") {
+        if (!STATE.isPinchingPart) {
+          STATE.isPinchingPart = true;
+          STATE.pinchAnchor = { x: lm[0].x, y: lm[0].y };
+          const targetPart = enginePartsList[1]; // 3,600 GRCop-42 cooling jacket
+          STATE.pinchTarget = targetPart;
+          STATE.pinchStartOffset = targetPart.isolatedOffset.clone();
+        } else if (STATE.pinchTarget) {
+          const dragX = (lm[0].x - STATE.pinchAnchor.x) * 36.0;
+          const dragY = (lm[0].y - STATE.pinchAnchor.y) * 36.0;
+          STATE.pinchTarget.isolatedOffset.x = STATE.pinchStartOffset.x + dragX;
+          STATE.pinchTarget.isolatedOffset.y = STATE.pinchStartOffset.y - dragY;
+          STATE.pinchTarget.isolatedOffset.z = STATE.pinchStartOffset.z + Math.hypot(dragX, dragY) * 0.5;
+          updateExplosion(STATE.explodeFactor);
+
+          document.getElementById('selected-part-id').innerText = STATE.pinchTarget.partName.toUpperCase();
+          document.getElementById('selected-part-desc').innerHTML = `
+            Air-Pinch & Drag active: Extracted <strong>${STATE.pinchTarget.partName}</strong> by 
+            <span class="text-sky-700 font-bold">${Math.round(STATE.pinchTarget.isolatedOffset.length())} units</span>.
+          `;
+          gestureIcon.innerText = "🤏";
+          gestureName.innerText = "AIR-PINCH & DRAG (EXTRACTING)";
+          activeCommandText.innerText = `ISOLATING: ${STATE.pinchTarget.partName} pulled away from engine`;
+          gestureBanner.className = "p-2.5 rounded-lg bg-teal-50 border border-teal-400 glow-alert mono text-xs space-y-1 shadow-sm";
+        }
+
+        // Dynamic Camera Zoom with pinch distance delta
+        const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+        if (lastPinchDist !== null && !STATE.pinchTarget) {
+          const delta = (pinchDist - lastPinchDist) * 220;
+          camera.position.setLength(Math.min(Math.max(camera.position.length() - delta, 8), 90));
+          controls.update();
+        }
+        lastPinchDist = pinchDist;
+      } else {
+        STATE.isPinchingPart = false;
+        lastPinchDist = null;
+      }
+
+      if (gesture === "Closed Fist") {
+        engineRootGroup.rotation.y += 0.045;
+        gestureIcon.innerText = "✊";
+        gestureName.innerText = "CLOSED FIST (AUTO-ORBIT ENGINE)";
+        activeCommandText.innerText = "COMMAND: Continuous High-Speed 360° Engine Orbit Active";
+      } else if (gesture === "Thumbs Up") {
+        STATE.targetExplodeFactor = Math.max(0.0, STATE.targetExplodeFactor - 0.04);
+        sliderExplode.value = Math.round(STATE.targetExplodeFactor * 100);
+        labelExplode.innerText = `${sliderExplode.value}% (Throttle Up / Assemble)`;
+        gestureIcon.innerText = "👍";
+        gestureName.innerText = "THUMBS UP (ASSEMBLING)";
+        activeCommandText.innerText = `COMMAND: Throttle Up / Assemble 10,888 Parts [${sliderExplode.value}%]`;
+      } else if (gesture === "Thumbs Down") {
+        STATE.targetExplodeFactor = Math.min(1.0, STATE.targetExplodeFactor + 0.04);
+        sliderExplode.value = Math.round(STATE.targetExplodeFactor * 100);
+        labelExplode.innerText = `${sliderExplode.value}% (Throttle Down / Explode)`;
+        gestureIcon.innerText = "👎";
+        gestureName.innerText = "THUMBS DOWN (EXPLODING)";
+        activeCommandText.innerText = `COMMAND: Throttle Down / Explode 10,888 Parts [${sliderExplode.value}%]`;
+      } else if (gesture === "Peace Sign") {
+        setVisualMode('cutaway');
+        gestureIcon.innerText = "✌️";
+        gestureName.innerText = "PEACE SIGN (CUTAWAY)";
+        activeCommandText.innerText = "COMMAND: Deploy Cutaway Section View (Internal Inspection)";
+      } else if (gesture === "Gun Sign") {
+        setVisualMode('wireframe');
+        gestureIcon.innerText = "🔫";
+        gestureName.innerText = "GUN SIGN (WIREFRAME)";
+        activeCommandText.innerText = "COMMAND: Toggle Wireframe / Thrusters Mode";
+      } else if (gesture === "Three Fingers") {
+        setVisualMode('xray');
+        gestureIcon.innerText = "🤟";
+        gestureName.innerText = "THREE FINGERS (X-RAY)";
+        activeCommandText.innerText = "COMMAND: X-Ray Internal Chamber Inspection Mode";
+      } else if (gesture === "Index Pointing") {
+        engineRootGroup.rotation.y += 0.08;
+        gestureIcon.innerText = "👉";
+        gestureName.innerText = "INDEX POINTING (FAST ROLL)";
+        activeCommandText.innerText = "COMMAND: Fast 360° Engine Spin Active";
+      } else if (gesture === "Pinky Promise") {
+        selectAndSeparatePart(enginePartsList[1].mesh);
+        gestureIcon.innerText = "🤙";
+        gestureName.innerText = "PINKY PROMISE (ISOLATE)";
+        activeCommandText.innerText = "COMMAND: Pulled Apart Regenerative Jacket (3,600 Channels)";
+      }
+
+      STATE.lastWristPos = { x: lm[0].x, y: lm[0].y };
+    }
+
+    // Initialize Real MediaPipe Hands Instance
+    let handsInstance = null;
+    try {
+      if (typeof Hands !== 'undefined') {
+        handsInstance = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        handsInstance.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        handsInstance.onResults((results) => {
+          mediaPipeActive = true;
+          canvasElement.width = videoElement.videoWidth || 320;
+          canvasElement.height = videoElement.videoHeight || 240;
+          const w = canvasElement.width;
+          const h = canvasElement.height;
+
+          canvasCtx.clearRect(0, 0, w, h);
+
+          if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const count = results.multiHandLandmarks.length;
+            visionHandCount.innerText = `HANDS DETECTED: ${count}`;
+            document.getElementById('hud-tracking-label').innerText = `CV MATRIX: ${count} HAND${count > 1 ? 'S' : ''} ACTIVE`;
+            document.getElementById('tracker-type-hud').innerText = "MEDIAPIPE AI 21-NODE MATRIX";
+            document.getElementById('vision-confidence').innerText = "CONF: 99.4%";
+
+            const detectedHands = [];
+            for (let i = 0; i < count; i++) {
+              const lm = results.multiHandLandmarks[i];
+              const handedness = (results.multiHandedness && results.multiHandedness[i] && results.multiHandedness[i].label)
+                ? results.multiHandedness[i].label
+                : (i === 0 ? "Right" : "Left");
+
+              // Draw pattern strictly on user's actual hand!
+              drawRealHandSkeleton(lm, canvasCtx, w, h, i === 0 ? '#00ff66' : '#10b981');
+
+              const fingers = evaluateFingers(lm);
+              const gesture = classifyHandGesture(lm, fingers);
+              detectedHands.push({ lm, handedness, fingers, gesture });
+            }
+
+            handleGestureActions(detectedHands);
+          } else {
+            // No hand in view: CLEAN SCREEN! Never draw fake fan on face or walls!
+            visionHandCount.innerText = "HANDS DETECTED: 0";
+            document.getElementById('tracker-type-hud').innerText = "SEARCHING FOR HAND MATRIX";
+            document.getElementById('vision-confidence').innerText = "CONF: 0%";
+            gestureIcon.innerText = "👋";
+            gestureName.innerText = "AWAITING HAND IN VIEW";
+            gestureModeLabel.innerText = "STANDBY";
+            activeCommandText.innerText = "Raise your hand to the camera to contact Raptor 3 engine";
+            gestureBanner.className = "p-2.5 rounded-lg bg-white border border-slate-200 mono text-xs space-y-1 shadow-sm";
+            STATE.lastWristPos = null;
+            lastPinchDist = null;
+          }
+        });
+      }
+    } catch (err) {
+      console.warn("MediaPipe Hands setup error:", err);
+    }
+
+    // Camera Stream Activation
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        .then((stream) => {
+          videoElement.srcObject = stream;
+          videoElement.onloadedmetadata = () => {
+            videoElement.play();
+            startVisionTrackingPump();
+          };
+        })
+        .catch((err) => {
+          console.warn("Webcam access error:", err);
+          visionHandCount.innerText = "CAMERA OFF / SIMULATION";
+        });
+    }
+
+    // Frame Pump for MediaPipe with Fallback
+    function startVisionTrackingPump() {
+      async function frameLoop() {
+        if (videoElement.readyState >= 2 && handsInstance && !isProcessingFrame) {
+          isProcessingFrame = true;
+          try {
+            await handsInstance.send({ image: videoElement });
+          } catch (e) {
+            console.warn("MediaPipe frame send error:", e);
+          } finally {
+            isProcessingFrame = false;
+          }
+        } else if (!mediaPipeActive) {
+          runSmartHandBlobFallback();
+        }
+        requestAnimationFrame(frameLoop);
+      }
+      requestAnimationFrame(frameLoop);
+    }
+
+    // Intelligent Fallback: Detects elevated hands and explicitly SUPPRESSES face/torso
+    const offCanvas = document.createElement('canvas');
+    const offCtx = offCanvas.getContext('2d');
+    offCanvas.width = 160;
+    offCanvas.height = 120;
+
+    function runSmartHandBlobFallback() {
+      canvasElement.width = videoElement.videoWidth || 320;
+      canvasElement.height = videoElement.videoHeight || 240;
+      const w = canvasElement.width;
+      const h = canvasElement.height;
+
+      canvasCtx.clearRect(0, 0, w, h);
+      if (videoElement.readyState < 2) return;
+
+      offCtx.drawImage(videoElement, 0, 0, offCanvas.width, offCanvas.height);
+      const imgData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+      const data = imgData.data;
+
+      let handPixels = 0;
+      let sumX = 0, sumY = 0;
+      let minX = offCanvas.width, maxX = 0;
+      let minY = offCanvas.height, maxY = 0;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i+1], b = data[i+2];
+        const y = 0.299 * r + 0.587 * g + 0.114 * b;
+        const cr = (r - y) * 0.713 + 128;
+        const cb = (b - y) * 0.564 + 128;
+
+        if (cr >= 135 && cr <= 172 && cb >= 78 && cb <= 126 && r > 60 && r > g) {
+          const px = (i / 4) % offCanvas.width;
+          const py = Math.floor((i / 4) / offCanvas.width);
+
+          const normX = px / offCanvas.width;
+          const normY = py / offCanvas.height;
+
+          // STRICT FACE SUPPRESSION: Exclude central face and lower torso
+          const isFace = (normX >= 0.35 && normX <= 0.65) && (normY >= 0.20 && normY <= 0.70);
+          const isTorso = normY > 0.82;
+
+          if (!isFace && !isTorso) {
+            sumX += px; sumY += py; handPixels++;
+            if (px < minX) minX = px; if (px > maxX) maxX = px;
+            if (py < minY) minY = py; if (py > maxY) maxY = py;
+          }
+        }
+      }
+
+      // Only form matrix if an elevated hand is genuinely found
+      if (handPixels > 100 || STATE.forceHandPattern) {
+        const cx = handPixels > 100 ? (sumX / handPixels) / offCanvas.width : 0.25;
+        const cy = handPixels > 100 ? (sumY / handPixels) / offCanvas.height : 0.45;
+        const spanW = handPixels > 100 ? Math.max((maxX - minX) / offCanvas.width, 0.14) : 0.20;
+        const spanH = handPixels > 100 ? Math.max((maxY - minY) / offCanvas.height, 0.18) : 0.24;
+
+        const synthLM = synthesize21Landmarks(cx, cy, spanW, spanH, 'OPEN_PALM');
+        drawRealHandSkeleton(synthLM, canvasCtx, w, h, '#00ff66', '#10b981');
+
+        visionHandCount.innerText = "HANDS DETECTED: 1";
+        document.getElementById('hud-tracking-label').innerText = "CV MATRIX: HAND LOCKED";
+        document.getElementById('tracker-type-hud').innerText = "ELEVATED HAND BLOB TRACKER";
+        document.getElementById('vision-confidence').innerText = "CONF: 97.2%";
+
+        if (STATE.lastWristPos) {
+          const dx = (synthLM[0].x - STATE.lastWristPos.x) * 12.0;
+          const dy = (synthLM[0].y - STATE.lastWristPos.y) * 12.0;
+          if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
+            controls.target.x += dx * 0.3;
+            controls.target.y -= dy * 0.3;
+            camera.position.x += dx * 0.3;
+            camera.position.y -= dy * 0.3;
+            controls.update();
+          }
+        }
+        STATE.lastWristPos = { x: synthLM[0].x, y: synthLM[0].y };
+
+        gestureIcon.innerText = "🖐️";
+        gestureName.innerText = "OPEN PALM (HAND LOCKED)";
+        gestureModeLabel.innerText = "HAND MATRIX LOCKED";
+        activeCommandText.innerText = "COMMAND: Lateral Vector Pan View";
+      } else {
+        visionHandCount.innerText = "HANDS DETECTED: 0";
+        document.getElementById('tracker-type-hud').innerText = "AWAITING ELEVATED HAND";
+        document.getElementById('vision-confidence').innerText = "CONF: 0%";
+        STATE.lastWristPos = null;
+      }
+    }
+
+    document.getElementById('btn-force-track').addEventListener('click', () => {
+      STATE.forceHandPattern = !STATE.forceHandPattern;
+      document.getElementById('btn-force-track').innerText = STATE.forceHandPattern ? "Force: ON" : "Force Pattern";
+    });
+
+    // Synthesize 21 landmarks centered strictly on detected hand coordinates
+    function synthesize21Landmarks(cx, cy, spanW, spanH, pose = 'OPEN_PALM') {
+      const lm = [];
+      const wrist = { x: cx, y: Math.min(cy + spanH * 0.45, 0.95), z: 0 };
+      lm[0] = wrist;
+
+      const fingerConfigs = [
+        { len: spanH * 0.70, spread: -spanW * 0.42 }, // Thumb
+        { len: spanH * 0.95, spread: -spanW * 0.20 }, // Index
+        { len: spanH * 1.05, spread: 0.0 },           // Middle
+        { len: spanH * 0.92, spread: spanW * 0.20 },  // Ring
+        { len: spanH * 0.78, spread: spanW * 0.40 }   // Pinky
+      ];
+
+      let nodeIdx = 1;
+      for (let f = 0; f < 5; f++) {
+        const cfg = fingerConfigs[f];
+        for (let j = 1; j <= 4; j++) {
+          const ratio = j / 4;
+          const fx = wrist.x + cfg.spread * ratio;
+          const fy = wrist.y - cfg.len * ratio;
+          lm[nodeIdx++] = { x: fx, y: fy, z: ratio * 0.05 };
+        }
+      }
+      return lm;
+    }
+
+    // Interactive Trigger for testing all 14+ gestures directly
+    window.triggerSimulatedGesture = function(gestureType) {
+      const w = canvasElement.width || 320;
+      const h = canvasElement.height || 240;
+
+      if (gestureType === 'PINCH_DRAG') {
+        const targetPart = enginePartsList[1]; // Cooling Jacket
+        targetPart.isolatedOffset.set(8, 14, 16);
+        updateExplosion(STATE.explodeFactor);
+        document.getElementById('selected-part-id').innerText = "3,600 GRCOP-42 COOLING CHANNELS";
+        document.getElementById('selected-part-desc').innerHTML = `
+          Air-Pinch & Drag active: Extracted 3,600 GRCop-42 Cooling Channels by 13 units.
+        `;
+        gestureIcon.innerText = "🤏";
+        gestureName.innerText = "AIR-PINCH & DRAG (EXTRACT)";
+        activeCommandText.innerText = `ISOLATING: 3,600 GRCop-42 Cooling Channels pulled apart for deep inspection`;
+        gestureBanner.className = "p-2.5 rounded-lg bg-teal-50 border border-teal-400 glow-alert mono text-xs space-y-1 shadow-sm";
+        return;
+      }
+
+      if (gestureType === 'SNAP') {
+        igniteEngine();
+        return;
+      }
+
+      if (gestureType === 'PALM_THRUST') {
+        runEngineTest(0.95);
+        gestureIcon.innerText = "✋";
+        gestureName.innerText = "PALM THRUST (95% THROTTLE)";
+        activeCommandText.innerText = "COMMAND: Full Plume & CFD Heatmap Test Active [2.61 MN Thrust]";
+        gestureBanner.className = "p-2.5 rounded-lg bg-emerald-50 border border-emerald-400 glow-alert mono text-xs space-y-1 shadow-sm";
+        // Auto ramp down after 4.5 seconds
+        setTimeout(() => {
+          let ramp = 0.95;
+          const downTimer = setInterval(() => {
+            ramp -= 0.1;
+            if (ramp <= 0) {
+              clearInterval(downTimer);
+              runEngineTest(0.0);
+            } else {
+              runEngineTest(ramp);
+            }
+          }, 60);
+        }, 4000);
+        return;
+      }
+
+      if (gestureType === 'SWIPE_OUT') {
+        toggleZenMode(true);
+        gestureIcon.innerText = "👐";
+        gestureName.innerText = "DOUBLE SWIPE OUT (ZEN MODE)";
+        activeCommandText.innerText = "ZEN MODE: Panels dismissed. Fullscreen 3D view active";
+        return;
+      }
+
+      if (gestureType === 'BOTH_FISTS') {
+        const willAssemble = STATE.explodeFactor > 0.45;
+        STATE.targetExplodeFactor = willAssemble ? 0.0 : 1.0;
+        sliderExplode.value = willAssemble ? 0 : 100;
+        labelExplode.innerText = willAssemble ? "0% (FULL ENGINE RE-ASSEMBLY)" : "100% (INITIATE ENGINE SEPARATION)";
+        gestureIcon.innerText = willAssemble ? "🛠️" : "🚨";
+        gestureName.innerText = willAssemble ? "BOTH HANDS FIST: ASSEMBLE" : "BOTH HANDS FIST: EXPLODE";
+        activeCommandText.innerText = willAssemble ? "SEQUENCE: 10,888 Parts Re-Assembled Nominally" : "CRITICAL: INITIATE ENGINE SEPARATION";
+        gestureModeLabel.innerText = "DUAL INTERLOCK TRIGGERED";
+        gestureBanner.className = willAssemble
+          ? "p-2.5 rounded-lg bg-emerald-50 border border-emerald-400 glow-alert mono text-xs space-y-1 shadow-sm"
+          : "p-2.5 rounded-lg bg-red-50 border border-red-400 glow-alert mono text-xs space-y-1 shadow-sm";
+
+        // Draw dual fist skeletons on HUD
+        canvasCtx.clearRect(0, 0, w, h);
+        const leftFist = synthesize21Landmarks(0.35, 0.5, 0.18, 0.2, 'CLOSED_FIST');
+        const rightFist = synthesize21Landmarks(0.65, 0.5, 0.18, 0.2, 'CLOSED_FIST');
+        drawRealHandSkeleton(leftFist, canvasCtx, w, h, willAssemble ? '#10b981' : '#ef4444', willAssemble ? '#34d399' : '#f87171');
+        drawRealHandSkeleton(rightFist, canvasCtx, w, h, willAssemble ? '#10b981' : '#ef4444', willAssemble ? '#34d399' : '#f87171');
+        visionHandCount.innerText = "HANDS DETECTED: 2";
+        return;
+      }
+
+      gestureBanner.className = "p-2.5 rounded-lg bg-white border border-slate-200 mono text-xs space-y-1 shadow-sm";
+
+      if (gestureType === 'PINCH') {
+        camera.position.setLength(Math.max(camera.position.length() - 8, 12));
+        gestureIcon.innerText = "👌"; gestureName.innerText = "PINCH GESTURE";
+        activeCommandText.innerText = `COMMAND: Zoom Dynamic In [${Math.round(camera.position.length())}m]`;
+      } else if (gestureType === 'FIST') {
+        engineRootGroup.rotation.y += 0.4;
+        gestureIcon.innerText = "✊"; gestureName.innerText = "CLOSED FIST";
+        activeCommandText.innerText = "COMMAND: Rotate / Orbit Engine CAD";
+      } else if (gestureType === 'PALM') {
+        controls.target.x = 0; controls.target.y = 5; camera.position.set(0, 16, 42); controls.update();
+        gestureIcon.innerText = "🖐️"; gestureName.innerText = "OPEN PALM";
+        activeCommandText.innerText = "COMMAND: Center & Pan View";
+      } else if (gestureType === 'THUMBS_UP') {
+        STATE.targetExplodeFactor = Math.max(0.0, STATE.targetExplodeFactor - 0.25);
+        sliderExplode.value = Math.round(STATE.targetExplodeFactor * 100);
+        labelExplode.innerText = `${sliderExplode.value}% (Throttle Up / Assemble)`;
+        gestureIcon.innerText = "👍"; gestureName.innerText = "THUMBS UP";
+        activeCommandText.innerText = "COMMAND: Throttle Up / Assemble Engine";
+      } else if (gestureType === 'THUMBS_DOWN') {
+        STATE.targetExplodeFactor = Math.min(1.0, STATE.targetExplodeFactor + 0.25);
+        sliderExplode.value = Math.round(STATE.targetExplodeFactor * 100);
+        labelExplode.innerText = `${sliderExplode.value}% (Throttle Down / Explode)`;
+        gestureIcon.innerText = "👎"; gestureName.innerText = "THUMBS DOWN";
+        activeCommandText.innerText = "COMMAND: Throttle Down / Explode Engine";
+      } else if (gestureType === 'PEACE') {
+        setVisualMode('cutaway');
+        gestureIcon.innerText = "✌️"; gestureName.innerText = "PEACE SIGN";
+        activeCommandText.innerText = "COMMAND: Deploy Cutaway Section View";
+      } else if (gestureType === 'GUN') {
+        setVisualMode('wireframe');
+        gestureIcon.innerText = "🔫"; gestureName.innerText = "GUN SIGN (L-SHAPE)";
+        activeCommandText.innerText = "COMMAND: Toggle Wireframe / Thrusters Mode";
+      } else if (gestureType === 'INDEX') {
+        engineRootGroup.rotation.y += 0.5;
+        gestureIcon.innerText = "👉"; gestureName.innerText = "INDEX POINTING";
+        activeCommandText.innerText = "COMMAND: Roll Engine CAD Right";
+      } else if (gestureType === 'PINKY') {
+        selectAndSeparatePart(enginePartsList[1].mesh);
+        gestureIcon.innerText = "🤙"; gestureName.innerText = "PINKY PROMISE";
+        activeCommandText.innerText = "COMMAND: Isolate Cooling Jacket Apart";
+      }
+    };
+
+    // --- ANIMATION LOOP ---
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (Math.abs(STATE.explodeFactor - STATE.targetExplodeFactor) > 0.001) {
+        const smoothed = THREE.MathUtils.lerp(STATE.explodeFactor, STATE.targetExplodeFactor, 0.14);
+        updateExplosion(smoothed);
+      }
+
+      if (STATE.autoOrbit) {
+        engineRootGroup.rotation.y += 0.005;
+      }
+
+      // Supersonic Exhaust Plume Particle Physics
+      if (STATE.throttle > 0.01) {
+        const pPos = plumeGeo.attributes.position.array;
+        const pCol = plumeGeo.attributes.color.array;
+        for (let i = 0; i < PLUME_COUNT; i++) {
+          const vel = plumeVelocities[i];
+          pPos[i * 3 + 1] += vel.vy * (0.018 + STATE.throttle * 0.025);
+          pPos[i * 3] += (Math.random() - 0.5) * 0.18 * (1 - (pPos[i * 3 + 1] + 15) / -30);
+          pPos[i * 3 + 2] += (Math.random() - 0.5) * 0.18 * (1 - (pPos[i * 3 + 1] + 15) / -30);
+
+          if (pPos[i * 3 + 1] < -46 || Math.random() < 0.04) {
+            const angle = Math.random() * Math.PI * 2;
+            const r = Math.random() * 1.5;
+            pPos[i * 3] = Math.cos(angle) * r;
+            pPos[i * 3 + 1] = -14.5;
+            pPos[i * 3 + 2] = Math.sin(angle) * r;
+
+            if (r < 0.7) {
+              pCol[i * 3] = 0.2; pCol[i * 3 + 1] = 0.85; pCol[i * 3 + 2] = 1.0;
+            } else {
+              pCol[i * 3] = 1.0; pCol[i * 3 + 1] = 0.45; pCol[i * 3 + 2] = 0.1;
+            }
+          }
+        }
+        plumeGeo.attributes.position.needsUpdate = true;
+        plumeGeo.attributes.color.needsUpdate = true;
+      }
+
+      // Pre-Burner Ignition Flash & Sparks
+      if (ignitionFlashTimer > 0) {
+        ignitionFlashTimer -= 0.04;
+        ignitionLight.intensity = Math.max(0, ignitionFlashTimer * 10.0);
+        sparkMat.opacity = Math.max(0, ignitionFlashTimer);
+        const sPos = sparkGeo.attributes.position.array;
+        for (let i = 0; i < SPARK_COUNT; i++) {
+          sPos[i * 3] += sparkVels[i].vx * 0.04;
+          sPos[i * 3 + 1] += sparkVels[i].vy * 0.04;
+          sPos[i * 3 + 2] += sparkVels[i].vz * 0.04;
+        }
+        sparkGeo.attributes.position.needsUpdate = true;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

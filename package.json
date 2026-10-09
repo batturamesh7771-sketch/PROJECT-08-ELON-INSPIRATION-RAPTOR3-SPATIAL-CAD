@@ -1,0 +1,26 @@
+{
+  "name": "project-08-elon-inspiration-raptor3-spatial-cad",
+  "version": "1.0.0",
+  "description": "SpaceX Starship Raptor 3 (V3) WebGL 3D CAD engine with touchless AI spatial dual-hand tracking, 10,888 parts explosion/assembly, supersonic plume CFD simulation, and pre-burner ignition synthesis.",
+  "main": "index.html",
+  "scripts": {
+    "start": "python start_server.py",
+    "test": "node scripts/verify_app.js",
+    "capture": "node scripts/capture_demo.js"
+  },
+  "keywords": [
+    "spacex",
+    "starship",
+    "raptor-3",
+    "webgl",
+    "threejs",
+    "mediapipe",
+    "spatial-computing",
+    "gesture-control",
+    "cad",
+    "elon-musk",
+    "cfd-simulation"
+  ],
+  "author": "Mr. Elonikhil",
+  "license": "MIT"
+}
