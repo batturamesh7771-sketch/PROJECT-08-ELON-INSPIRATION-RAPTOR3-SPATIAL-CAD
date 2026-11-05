@@ -23,7 +23,7 @@ git commit -m "feat: initial commit of SpaceX Starship Raptor 3 Spatial CAD engi
 1. Go to [GitHub New Repository](https://github.com/new).
 2. Set the repository name to:
    ```
-   project-08-elon-inspiration-raptor3-spatial-cad
+   PROJECT-08-ELON-INSPIRATION-RAPTOR3-SPATIAL-CAD
    ```
 3. Set the repository to **Public**.
 4. Leave "Add a README file" unchecked (you already have a comprehensive `README.md`).
@@ -36,16 +36,14 @@ git commit -m "feat: initial commit of SpaceX Starship Raptor 3 Spatial CAD engi
 Copy your repository's URL from GitHub and run:
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/project-08-elon-inspiration-raptor3-spatial-cad.git
+git remote add origin https://github.com/batturamesh7771-sketch/PROJECT-08-ELON-INSPIRATION-RAPTOR3-SPATIAL-CAD.git
 git branch -M main
 git push -u origin main
 ```
 
-*(Replace `YOUR_USERNAME` with your actual GitHub username).*
-
 ---
 
-## Step 4: Enable Free Live Hosting via GitHub Pages
+## Step 4: Permanent Cloud Live Hosting via GitHub Pages
 
 1. In your GitHub repository, click on **Settings** (top right tab).
 2. In the left navigation menu, click **Pages** (under the "Code and automation" section).
@@ -53,9 +51,9 @@ git push -u origin main
    - Select `main` branch.
    - Select `/ (root)` folder.
    - Click **Save**.
-4. Within 60 seconds, your site will be live worldwide at:
+4. Your permanent live cloud link:
    ```
-   https://YOUR_USERNAME.github.io/project-08-elon-inspiration-raptor3-spatial-cad/
+   https://batturamesh7771-sketch.github.io/PROJECT-08-ELON-INSPIRATION-RAPTOR3-SPATIAL-CAD/
    ```
 
 ---

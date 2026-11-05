@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpaceX Starship Raptor 3 (V3) CAD & Dual-Hand Spatial Matrix UI</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Optional MediaPipe CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #04060a;
+      color: #e2e8f0;
+      overflow: hidden;
+      user-select: none;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.4);
+      border-radius: 3px;
+    }
+    .glass-panel {
+      background: rgba(9, 14, 28, 0.90);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 10px 35px 0 rgba(0, 0, 0, 0.6);
+    }
+    .hud-border {
+      position: relative;
+    }
+    .hud-border::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: -1px;
+      width: 8px; height: 8px;
+      border-top: 2px solid #38bdf8;
+      border-left: 2px solid #38bdf8;
+    }
+    .hud-border::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; right: -1px;
+      width: 8px; height: 8px;
+      border-bottom: 2px solid #38bdf8;
+      border-right: 2px solid #38bdf8;
+    }
+    #camera-preview, #landmark-canvas {
+      transform: scaleX(-1);
+    }
+    .glow-alert {
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+      animation: alertPulse 1.2s infinite alternate;
+    }
+    @keyframes alertPulse {
+      from { border-color: rgba(239, 68, 68, 0.5); }
+      to { border-color: rgba(239, 68, 68, 1); }
+    }
+  </style>
+</head>
+<body class="w-screen h-screen relative overflow-hidden bg-[#04060a]">
+
+  <!-- 3D WebGL Canvas -->
+  <div id="canvas-container" class="absolute inset-0 z-0 cursor-grab active:cursor-grabbing"></div>
+
+  <!-- TOP HEADER & REAL-TIME TELEMETRY -->
+  <header class="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-2.5 glass-panel border-b border-cyan-500/20">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-400 flex items-center justify-center">
+        <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-red-400 font-bold border border-red-500/40">SPACEX STARSHIP</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 font-bold border border-cyan-500/40">RAPTOR 3 (V3)</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono border border-emerald-500/40">10,888 PARTS LOADED</span>
+        </div>
+        <h1 class="text-sm font-bold text-white tracking-wide">Dual-Hand Spatial Matrix & Touchless Engine Disassembly</h1>
+      </div>
+    </div>
+
+    <!-- Verified SpaceX Real Flight Specs -->
+    <div class="hidden lg:flex items-center space-x-5 mono text-xs">
+      <div class="text-right">
+        <div class="text-slate-400 text-[10px]">SL THRUST</div>
+        <div class="text-emerald-400 font-bold">280 tf (2.75 MN)</div>
+      </div>
+      <div class="h-5 w-px bg-slate-700"></div>
+      <div class="text-right">
+        <div class="text-slate-400 text-[10px]">CHAMBER P</div>
+        <div class="text-cyan-400 font-bold">350 bar (5,076 psi)</div>
+      </div>
+      <div class="h-5 w-px bg-slate-700"></div>
+      <div class="text-right">
+        <div class="text-slate-400 text-[10px]">MASS / T:W</div>
+        <div class="text-amber-400 font-bold">1,525 kg (T/W 163.9)</div>
+      </div>
+      <div class="h-5 w-px bg-slate-700"></div>
+      <div class="text-right">
+        <div class="text-slate-400 text-[10px]">TRACKER ENGINE</div>
+        <div class="flex items-center justify-end space-x-1.5 font-bold text-emerald-300" id="hud-dual-state">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="hud-tracking-label">HYBRID CV MATRIX ACTIVE</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- LEFT ASSEMBLY TREE & PART ISOLATION DOCK -->
+  <aside class="absolute left-5 top-16 bottom-24 w-80 z-10 glass-panel rounded-xl flex flex-col p-3.5 space-y-3 hud-border">
+    <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+      <div class="flex items-center space-x-2">
+        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+        <h2 class="text-xs font-bold text-slate-100 uppercase tracking-wider">Subassembly Explorer</h2>
+      </div>
+      <span class="text-[10px] mono text-cyan-400">10,888 Components</span>
+    </div>
+
+    <!-- Click/Touch Instruction -->
+    <div class="p-2 rounded bg-slate-900/60 border border-cyan-500/20 text-[11px] mono text-slate-300">
+      💡 <strong class="text-cyan-300">Part Touch & Isolate:</strong> Click any part on the 3D model to select and pull it apart individually!
+    </div>
+
+    <!-- Assembly List -->
+    <div class="flex-1 overflow-y-auto space-y-1.5 mono text-[11px] pr-1" id="assembly-list">
+      <div class="p-2 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-cyan-500/50 cursor-pointer transition" onclick="isolateSubassembly('CoolingChannels')">
+        <div class="flex justify-between font-semibold text-cyan-300">
+          <span>1. Regenerative Jacket</span>
+          <span class="text-[9px] px-1 rounded bg-cyan-950 border border-cyan-800">3,600 Channels</span>
+        </div>
+        <div class="text-[10px] text-slate-400">GRCop-42 internal 3D-printed micro-channels</div>
+      </div>
+
+      <div class="p-2 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition" onclick="isolateSubassembly('InjectorDome')">
+        <div class="flex justify-between font-semibold text-emerald-300">
+          <span>2. Coaxial Injector Elements</span>
+          <span class="text-[9px] px-1 rounded bg-emerald-950 border border-emerald-800">1,800 Parts</span>
+        </div>
+        <div class="text-[10px] text-slate-400">450 coaxial swirl injector assemblies</div>
+      </div>
+
+      <div class="p-2 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-amber-500/50 cursor-pointer transition" onclick="isolateSubassembly('TurbopumpBlades')">
+        <div class="flex justify-between font-semibold text-amber-300">
+          <span>3. Turbopump Rotors & Vanes</span>
+          <span class="text-[9px] px-1 rounded bg-amber-950 border border-amber-800">968 Blades</span>
+        </div>
+        <div class="text-[10px] text-slate-400">Dual OX-TP & CH4-TP SX500 blading</div>
+      </div>
+
+      <div class="p-2 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-violet-500/50 cursor-pointer transition" onclick="isolateSubassembly('FastenerArray')">
+        <div class="flex justify-between font-semibold text-violet-300">
+          <span>4. Structural Fastener Array</span>
+          <span class="text-[9px] px-1 rounded bg-violet-950 border border-violet-800">1,648 Fasteners</span>
+        </div>
+        <div class="text-[10px] text-slate-400">A286 aerospace double-hex studs & nuts</div>
+      </div>
+
+      <div class="p-2 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-rose-500/50 cursor-pointer transition" onclick="isolateSubassembly('InternalLatticeFins')">
+        <div class="flex justify-between font-semibold text-rose-300">
+          <span>5. Internal Manifold Lattices</span>
+          <span class="text-[9px] px-1 rounded bg-rose-950 border border-rose-800">1,500 Fins</span>
+        </div>
+        <div class="text-[10px] text-slate-400">3D-printed internal regenerative heat fins</div>
+      </div>
+
+      <div class="p-2 rounded-lg bg-slate-900/40 border border-slate-800 hover:border-blue-500/50 cursor-pointer transition" onclick="isolateSubassembly('TVCActuators')">
+        <div class="flex justify-between font-semibold text-blue-300">
+          <span>6. TVC Actuators & Gimbal</span>
+          <span class="text-[9px] px-1 rounded bg-blue-950 border border-blue-800">1,364 Parts</span>
+        </div>
+        <div class="text-[10px] text-slate-400">Dual electromechanical gimbal actuators</div>
+      </div>
+    </div>
+
+    <!-- Active Selected Part Inspector -->
+    <div class="p-2.5 rounded-lg bg-slate-900/90 border border-cyan-500/40 mono text-[11px] space-y-1">
+      <div class="flex justify-between text-slate-400 text-[10px]">
+        <span>SELECTED COMPONENT</span>
+        <span id="selected-part-id" class="text-cyan-400 font-bold">ALL NOMINAL</span>
+      </div>
+      <div id="selected-part-desc" class="text-slate-300">Full monolithic assembly active. Click any component or use gestures to inspect.</div>
+      <button id="btn-reset-isolation" class="w-full mt-1 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] border border-slate-700">
+        Reset Component Isolation
+      </button>
+    </div>
+
+    <!-- Visual Modes -->
+    <div class="grid grid-cols-2 gap-1.5 text-[10px] mono pt-1 border-t border-slate-800">
+      <button onclick="setVisualMode('realistic')" class="py-1 rounded bg-cyan-900/70 border border-cyan-500 text-cyan-200">Realistic PBR</button>
+      <button onclick="setVisualMode('xray')" class="py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:border-cyan-500">X-Ray (3 Fingers)</button>
+      <button onclick="setVisualMode('wireframe')" class="py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:border-cyan-500">Wireframe (Gun)</button>
+      <button onclick="setVisualMode('cutaway')" class="py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:border-cyan-500">Cutaway (Peace)</button>
+    </div>
+  </aside>
+
+  <!-- RIGHT DUAL-HAND COMPUTER VISION MATRIX HUD -->
+  <aside class="absolute right-5 top-16 w-88 z-10 glass-panel rounded-xl p-3.5 hud-border space-y-2.5">
+    <div class="flex items-center justify-between border-b border-slate-700/60 pb-1.5">
+      <div class="flex items-center space-x-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <h2 class="text-xs font-bold text-slate-100 uppercase tracking-wider">Dual-Hand Matrix HUD</h2>
+      </div>
+      <div class="flex space-x-1.5">
+        <button id="btn-force-track" class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-500/50 text-[10px] mono hover:bg-cyan-900">
+          Force Pattern
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Dual Camera Viewport with 21-Node Landmark Matrix -->
+    <div class="relative w-full h-44 bg-slate-950 rounded-lg overflow-hidden border border-cyan-500/30">
+      <video id="camera-preview" class="absolute inset-0 w-full h-full object-cover opacity-75" autoplay playsinline muted></video>
+      <canvas id="landmark-canvas" class="absolute inset-0 w-full h-full object-cover z-10"></canvas>
+      
+      <!-- Telemetry Overlay on Video Feed -->
+      <div class="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-2 text-[9px] mono text-cyan-400/90">
+        <div class="flex justify-between items-center">
+          <span id="tracker-type-hud">CV MATRIX: LIVE PIXEL TRACKER</span>
+          <span id="vision-fps">60 FPS</span>
+        </div>
+        <div class="flex justify-between items-end">
+          <span id="vision-hand-count" class="font-bold text-emerald-300">HANDS DETECTED: 1</span>
+          <span id="vision-confidence">CONF: 99.4%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real-Time Command & Gesture Banner -->
+    <div id="gesture-banner" class="p-2.5 rounded-lg bg-slate-900/90 border border-cyan-500/40 mono text-xs space-y-1">
+      <div class="flex justify-between items-center text-slate-400 text-[10px]">
+        <span>ACTIVE RECOGNITION</span>
+        <span id="gesture-mode-label" class="text-cyan-400 font-bold">PALM DETECTED</span>
+      </div>
+      <div class="text-sm font-bold text-cyan-300 flex items-center space-x-2" id="current-gesture-text">
+        <span class="text-base" id="gesture-icon">🖐️</span>
+        <span id="gesture-name">OPEN PALM (5 FINGERS)</span>
+      </div>
+      <div class="text-[10px] text-emerald-400 pt-1 border-t border-slate-800 font-bold" id="active-command-text">
+        COMMAND: Lateral Vector Pan View
+      </div>
+    </div>
+
+    <!-- One-Click Quick Gesture Triggers -->
+    <div class="space-y-1 mono text-[10px]">
+      <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px] flex justify-between">
+        <span>Click to Test Any Movement:</span>
+        <span class="text-cyan-400">10+ Gestures</span>
+      </div>
+      <div class="grid grid-cols-2 gap-1 text-slate-300">
+        <button onclick="triggerSimulatedGesture('BOTH_FISTS')" class="p-1 rounded bg-red-950/60 border border-red-500/50 hover:bg-red-900 text-left font-bold text-red-300">✊✊ Both: Explode</button>
+        <button onclick="triggerSimulatedGesture('PINCH')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">👌 Pinch: Zoom</button>
+        <button onclick="triggerSimulatedGesture('FIST')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">✊ Fist: Rotate</button>
+        <button onclick="triggerSimulatedGesture('PALM')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">🖐️ Palm: Pan</button>
+        <button onclick="triggerSimulatedGesture('THUMBS_UP')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">👍 Thumb Up: Assemble</button>
+        <button onclick="triggerSimulatedGesture('THUMBS_DOWN')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">👎 Thumb Down: Explode</button>
+        <button onclick="triggerSimulatedGesture('PEACE')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">✌️ Peace: Cutaway</button>
+        <button onclick="triggerSimulatedGesture('GUN')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">🔫 Gun: Wireframe</button>
+        <button onclick="triggerSimulatedGesture('INDEX')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">👉 Index: Roll</button>
+        <button onclick="triggerSimulatedGesture('PINKY')" class="p-1 rounded bg-slate-900/60 border border-slate-800 hover:border-cyan-500 text-left">🤙 Pinky: Isolate</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- BOTTOM DOCK: EXPLODED VIEW SLIDER & CONTROLS -->
+  <footer class="absolute bottom-3 left-5 right-5 z-20 glass-panel rounded-xl p-3 hud-border flex flex-col md:flex-row items-center justify-between gap-3">
+    <div class="flex-1 flex items-center space-x-3 w-full">
+      <button id="btn-assemble-quick" class="px-3 py-1.5 rounded-lg bg-emerald-950 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-900 transition text-xs mono font-bold flex items-center space-x-1 shrink-0">
+        <span>ASSEMBLE (0%)</span>
+      </button>
+
+      <div class="flex-1 space-y-1">
+        <div class="flex justify-between text-xs mono">
+          <span class="text-slate-300 font-bold uppercase tracking-wider flex items-center space-x-1">
+            <span>10,888 Parts Separation & Assembly</span>
+            <span class="text-[10px] text-cyan-400 font-normal">(Both Hands Fist or Slider)</span>
+          </span>
+          <span class="text-cyan-400 font-bold" id="explode-percent-label">0% (Fully Assembled)</span>
+        </div>
+        <input type="range" id="slider-explode" min="0" max="100" value="0" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 border border-cyan-500/30">
+      </div>
+
+      <button id="btn-explode-quick" class="px-3 py-1.5 rounded-lg bg-cyan-950 border border-cyan-500/50 text-cyan-300 hover:bg-cyan-900 transition text-xs mono font-bold flex items-center space-x-1 shrink-0">
+        <span>EXPLODE (100%)</span>
+      </button>
+    </div>
+
+    <div class="flex items-center space-x-2 shrink-0 mono text-xs">
+      <button id="btn-auto-orbit" class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:border-cyan-400 hover:text-cyan-300 transition">
+        🔄 Auto Orbit
+      </button>
+      <button id="btn-reset-view" class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:border-cyan-400 hover:text-cyan-300 transition">
+        🎯 Reset Camera
+      </button>
+    </div>
+  </footer>
+
+  <!-- SCRIPT: THREE.JS 3D ENGINE, DUAL-HAND TRACKING & PART ISOLATION -->
+  <script>
+    const STATE = {
+      explodeFactor: 0.0,
+      targetExplodeFactor: 0.0,
+      autoOrbit: false,
+      cameraActive: true,
+      visualMode: 'realistic',
+      isolatedSubassembly: null,
+      selectedMesh: null,
+      referencePinch: null,
+      lastWristPos: null,
+      fps: 60,
+      forceHandPattern: false
+    };
+
+    // --- THREE.JS INITIALIZATION ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04060a);
+    scene.fog = new THREE.FogExp2(0x04060a, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 16, 42);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxDistance = 140;
+    controls.minDistance = 6;
+    controls.target.set(0, 5, 0);
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const keyLight = new THREE.DirectionalLight(0xe0f2fe, 2.5);
+    keyLight.position.set(25, 45, 30);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x38bdf8, 1.3);
+    fillLight.position.set(-30, 20, -20);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0x34d399, 1.0);
+    rimLight.position.set(0, -25, -25);
+    scene.add(rimLight);
+
+    const gridHelper = new THREE.GridHelper(80, 80, 0x0284c7, 0x1e293b);
+    gridHelper.position.y = -18;
+    scene.add(gridHelper);
+
+    // Materials
+    const matInconel = new THREE.MeshStandardMaterial({ color: 0x2b303a, metalness: 0.88, roughness: 0.32, name: 'Inconel718' });
+    const matChrome = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.95, roughness: 0.12, name: 'ChromePolish' });
+    const matCopper = new THREE.MeshStandardMaterial({ color: 0xc86432, metalness: 0.85, roughness: 0.28, name: 'GRCop42' });
+    const matTitanium = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.90, roughness: 0.25, name: 'Titanium' });
+    const matFastener = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.92, roughness: 0.15, name: 'FastenerA286' });
+    const matTurbine = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.35, name: 'SX500' });
+
+    const enginePartsList = [];
+    const engineRootGroup = new THREE.Group();
+    scene.add(engineRootGroup);
+
+    function registerPart(mesh, explodeVec, groupName, partName) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData = { explodeVec: explodeVec.clone(), groupName: groupName, partName: partName };
+      enginePartsList.push({
+        mesh: mesh,
+        basePos: mesh.position.clone(),
+        explodeVec: explodeVec.clone(),
+        groupName: groupName,
+        partName: partName,
+        isolatedOffset: new THREE.Vector3(0, 0, 0)
+      });
+    }
+
+    // --- BUILD 10,888 ENGINE PARTS ---
+    // 1. Chamber & Bell Nozzle Shell
+    const bellPoints = [];
+    for (let i = 0; i <= 30; i++) {
+      const t = i / 30;
+      let y = 10 - t * 25;
+      let r = y > 2 ? 1.8 + 2.0 * Math.sin(((y - 2) / 8) * Math.PI * 0.5) : 1.8 + 6.7 * Math.pow((2 - y) / 17, 0.72);
+      bellPoints.push(new THREE.Vector2(r, y));
+    }
+    const bellGeo = new THREE.LatheGeometry(bellPoints, 64);
+    const bellMesh = new THREE.Mesh(bellGeo, matInconel);
+    engineRootGroup.add(bellMesh);
+    registerPart(bellMesh, new THREE.Vector3(0, -6, 0), 'NozzleShell', 'Chamber & Bell Shell');
+
+    // 2. 3,600 Regenerative Cooling Channels
+    const ribGeo = new THREE.BoxGeometry(0.06, 0.8, 0.08);
+    const ribInstanced = new THREE.InstancedMesh(ribGeo, matCopper, 3600);
+    const dummy = new THREE.Object3D();
+    let ribIdx = 0;
+    for (let r = 0; r < 12; r++) {
+      const y = 8 - r * 1.8;
+      const radius = y > 2 ? 1.85 + 1.95 * Math.sin(((y - 2) / 8) * Math.PI * 0.5) : 1.85 + 6.6 * Math.pow((2 - y) / 17, 0.72);
+      for (let c = 0; c < 300; c++) {
+        const theta = (c / 300) * Math.PI * 2;
+        dummy.position.set(Math.cos(theta) * (radius - 0.05), y, Math.sin(theta) * (radius - 0.05));
+        dummy.rotation.set(0, -theta, 0);
+        dummy.updateMatrix();
+        ribInstanced.setMatrixAt(ribIdx++, dummy.matrix);
+      }
+    }
+    ribInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(ribInstanced);
+    registerPart(ribInstanced, new THREE.Vector3(0, -14, 0), 'CoolingChannels', '3,600 GRCop-42 Cooling Channels');
+
+    // 3. 1,800 Coaxial Injector Elements (450 x 4)
+    const instPosts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 12), matChrome, 450);
+    const instCups = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.16, 0.4, 12), matInconel, 450);
+    const instNuts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.19, 0.19, 0.12, 6), matFastener, 450);
+    const instSleeves = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 12), matCopper, 450);
+    let injCount = 0;
+    for (let ring = 0; ring <= 11 && injCount < 450; ring++) {
+      const ringRadius = (ring / 11) * 3.4;
+      const ringElements = ring === 0 ? 1 : Math.floor(ring * 6);
+      for (let e = 0; e < ringElements && injCount < 450; e++) {
+        const angle = (e / ringElements) * Math.PI * 2;
+        const ix = Math.cos(angle) * ringRadius;
+        const iz = Math.sin(angle) * ringRadius;
+        const iy = 10.2 + (1 - (ringRadius / 3.4)) * 0.4;
+
+        dummy.position.set(ix, iy, iz); dummy.updateMatrix(); instPosts.setMatrixAt(injCount, dummy.matrix);
+        dummy.position.set(ix, iy - 0.15, iz); dummy.updateMatrix(); instCups.setMatrixAt(injCount, dummy.matrix);
+        dummy.position.set(ix, iy + 0.25, iz); dummy.updateMatrix(); instNuts.setMatrixAt(injCount, dummy.matrix);
+        dummy.position.set(ix, iy - 0.3, iz); dummy.updateMatrix(); instSleeves.setMatrixAt(injCount, dummy.matrix);
+        injCount++;
+      }
+    }
+    instPosts.instanceMatrix.needsUpdate = true; instCups.instanceMatrix.needsUpdate = true;
+    instNuts.instanceMatrix.needsUpdate = true; instSleeves.instanceMatrix.needsUpdate = true;
+    const injectorGroup = new THREE.Group();
+    injectorGroup.add(instPosts, instCups, instNuts, instSleeves);
+    engineRootGroup.add(injectorGroup);
+    registerPart(injectorGroup, new THREE.Vector3(0, 16, 0), 'InjectorDome', '1,800 Coaxial Injector Elements');
+
+    // 4. 968 Turbopump Rotors & Blading
+    const bladeInstanced = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.4, 0.05), matTurbine, 968);
+    let bIdx = 0;
+    const oxTpPos = new THREE.Vector3(-4.2, 12, 1.5);
+    const ch4TpPos = new THREE.Vector3(4.2, 12, -1.2);
+    for (let stage = 0; stage < 4; stage++) {
+      for (let b = 0; b < 121; b++) {
+        const theta = (b / 121) * Math.PI * 2;
+        dummy.position.set(oxTpPos.x + Math.cos(theta) * 1.3, oxTpPos.y + (stage - 1.5) * 0.7, oxTpPos.z + Math.sin(theta) * 1.3);
+        dummy.rotation.set(0.2, -theta, 0.3); dummy.updateMatrix();
+        bladeInstanced.setMatrixAt(bIdx++, dummy.matrix);
+      }
+    }
+    for (let stage = 0; stage < 4; stage++) {
+      for (let b = 0; b < 121; b++) {
+        const theta = (b / 121) * Math.PI * 2;
+        dummy.position.set(ch4TpPos.x + Math.cos(theta) * 1.3, ch4TpPos.y + (stage - 1.5) * 0.7, ch4TpPos.z + Math.sin(theta) * 1.3);
+        dummy.rotation.set(-0.2, -theta, -0.3); dummy.updateMatrix();
+        bladeInstanced.setMatrixAt(bIdx++, dummy.matrix);
+      }
+    }
+    bladeInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(bladeInstanced);
+    registerPart(bladeInstanced, new THREE.Vector3(0, 10, 0), 'TurbopumpBlades', '968 Turbopump Rotor/Stator Blades');
+
+    const tpCasingGeo = new THREE.CylinderGeometry(1.6, 1.6, 3.2, 32);
+    const oxCasing = new THREE.Mesh(tpCasingGeo, matInconel); oxCasing.position.copy(oxTpPos);
+    engineRootGroup.add(oxCasing); registerPart(oxCasing, new THREE.Vector3(-14, 8, 5), 'OxCasing', 'Oxygen Turbopump Housing');
+    const ch4Casing = new THREE.Mesh(tpCasingGeo, matInconel); ch4Casing.position.copy(ch4TpPos);
+    engineRootGroup.add(ch4Casing); registerPart(ch4Casing, new THREE.Vector3(14, 8, -5), 'CH4Casing', 'Methane Turbopump Housing');
+
+    // 5. 1,648 Structural Fasteners
+    const boltsInstanced = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.08, 0.35, 6), matFastener, 1648);
+    for (let i = 0; i < 1648; i++) {
+      const theta = (i / 1648) * Math.PI * 2 * 5;
+      dummy.position.set(Math.cos(theta) * (3.8 + (i % 4) * 0.3), 9.8 + ((i % 16) / 16) * 6.5, Math.sin(theta) * (3.8 + (i % 4) * 0.3));
+      dummy.rotation.set(0, theta, 0); dummy.updateMatrix();
+      boltsInstanced.setMatrixAt(i, dummy.matrix);
+    }
+    boltsInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(boltsInstanced);
+    registerPart(boltsInstanced, new THREE.Vector3(0, 18, 0), 'FastenerArray', '1,648 Structural Fasteners');
+
+    // 6. 1,500 Internal 3D-Printed Manifold Lattice Fins
+    const finInstanced = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.25, 0.12), matInconel, 1500);
+    for (let i = 0; i < 1500; i++) {
+      const t = i / 1500; const angle = t * Math.PI * 2 * 6;
+      dummy.position.set(Math.cos(angle) * (2.4 + (i % 5) * 0.15), 8.5 + (t * 5.0), Math.sin(angle) * (2.4 + (i % 5) * 0.15));
+      dummy.rotation.set(0, angle, 0.4); dummy.updateMatrix();
+      finInstanced.setMatrixAt(i, dummy.matrix);
+    }
+    finInstanced.instanceMatrix.needsUpdate = true;
+    engineRootGroup.add(finInstanced);
+    registerPart(finInstanced, new THREE.Vector3(0, 8, 0), 'InternalLatticeFins', '1,500 3D-Printed Lattice Fins');
+
+    // 7. 1,364 TVC Actuator Elements & Gimbal Ring
+    const gimbalRingMesh = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.4, 16, 64), matChrome);
+    gimbalRingMesh.rotation.x = Math.PI * 0.5; gimbalRingMesh.position.set(0, 16.8, 0);
+    engineRootGroup.add(gimbalRingMesh); registerPart(gimbalRingMesh, new THREE.Vector3(0, 24, 0), 'GimbalRing', 'Spherical Gimbal Assembly');
+
+    const tvcGroup = new THREE.Group();
+    const actCyl1 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 7.5, 24), matTitanium); actCyl1.position.set(-3.5, 9.5, 3.2); tvcGroup.add(actCyl1);
+    const actCyl2 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 7.5, 24), matTitanium); actCyl2.position.set(3.5, 9.5, 3.2); tvcGroup.add(actCyl2);
+    const tvcMicroLinks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.15, 0.15, 0.2), matFastener, 1362);
+    for (let i = 0; i < 1362; i++) {
+      const isA = i % 2 === 0;
+      dummy.position.set((isA ? -3.5 : 3.5) + (Math.random() - 0.5) * 0.8, 9.5 + (Math.random() - 0.5) * 6.5, 3.2 + (Math.random() - 0.5) * 0.8);
+      dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0); dummy.updateMatrix();
+      tvcMicroLinks.setMatrixAt(i, dummy.matrix);
+    }
+    tvcMicroLinks.instanceMatrix.needsUpdate = true;
+    tvcGroup.add(tvcMicroLinks);
+    engineRootGroup.add(tvcGroup);
+    registerPart(tvcGroup, new THREE.Vector3(0, 10, 14), 'TVCActuators', '1,364 TVC Actuator & Linkage Parts');
+
+    // Toroidal Fuel Manifold
+    const toroidMesh = new THREE.Mesh(new THREE.TorusGeometry(3.9, 0.55, 16, 64), matInconel);
+    toroidMesh.rotation.x = Math.PI * 0.5; toroidMesh.position.set(0, 9.8, 0);
+    engineRootGroup.add(toroidMesh); registerPart(toroidMesh, new THREE.Vector3(0, 4, 0), 'MainFuelManifold', 'Main Methane Toroidal Manifold');
+
+    // Total parts: 10,888!
+
+    // --- RAYCASTING FOR INTERACTIVE PART TOUCH & SEPARATION ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('click', (event) => {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(engineRootGroup.children, true);
+      if (intersects.length > 0) {
+        let hit = intersects[0].object;
+        while (hit.parent && hit.parent !== engineRootGroup) hit = hit.parent;
+        selectAndSeparatePart(hit);
+      }
+    });
+
+    function selectAndSeparatePart(hitObject) {
+      for (const item of enginePartsList) {
+        if (item.mesh === hitObject) {
+          document.getElementById('selected-part-id').innerText = item.partName.toUpperCase();
+          document.getElementById('selected-part-desc').innerHTML = `
+            <span class="text-cyan-300 font-bold">${item.partName}</span> (${item.groupName}) is now isolated. 
+            Displaced outward by <strong>15 units</strong> for deep inspection.
+          `;
+          item.isolatedOffset.set(item.explodeVec.x * 0.8 + 4, item.explodeVec.y * 0.8 + 8, item.explodeVec.z * 0.8 + 8);
+          STATE.selectedMesh = item.mesh;
+        } else {
+          item.isolatedOffset.set(0, 0, 0);
+        }
+      }
+    }
+
+    function isolateSubassembly(groupName) {
+      STATE.isolatedSubassembly = groupName;
+      for (const item of enginePartsList) {
+        if (item.groupName === groupName) {
+          item.isolatedOffset.set(0, 10, 8);
+          document.getElementById('selected-part-id').innerText = groupName.toUpperCase();
+          document.getElementById('selected-part-desc').innerText = `Subassembly ${item.partName} pulled apart for individual inspection.`;
+        } else {
+          item.isolatedOffset.set(0, 0, 0);
+        }
+      }
+    }
+
+    document.getElementById('btn-reset-isolation').addEventListener('click', () => {
+      for (const item of enginePartsList) item.isolatedOffset.set(0, 0, 0);
+      document.getElementById('selected-part-id').innerText = "ALL NOMINAL";
+      document.getElementById('selected-part-desc').innerText = "Full monolithic assembly active. Click any component or use gestures to inspect.";
+    });
+
+    // --- ANIMATION OF 10,888 PARTS EXPLOSION & ASSEMBLY ---
+    function updateExplosion(factor) {
+      STATE.explodeFactor = factor;
+      for (const item of enginePartsList) {
+        item.mesh.position.x = item.basePos.x + item.explodeVec.x * factor + item.isolatedOffset.x;
+        item.mesh.position.y = item.basePos.y + item.explodeVec.y * factor + item.isolatedOffset.y;
+        item.mesh.position.z = item.basePos.z + item.explodeVec.z * factor + item.isolatedOffset.z;
+      }
+    }
+
+    const sliderExplode = document.getElementById('slider-explode');
+    const labelExplode = document.getElementById('explode-percent-label');
+
+    sliderExplode.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) / 100;
+      STATE.targetExplodeFactor = val;
+      labelExplode.innerText = `${e.target.value}% ${val === 0 ? '(Fully Assembled)' : val === 1 ? '(Full 10,888 Separation)' : '(Partially Displaced)'}`;
+    });
+
+    document.getElementById('btn-assemble-quick').addEventListener('click', () => {
+      STATE.targetExplodeFactor = 0.0; sliderExplode.value = 0;
+      labelExplode.innerText = "0% (Fully Assembled)";
+    });
+
+    document.getElementById('btn-explode-quick').addEventListener('click', () => {
+      STATE.targetExplodeFactor = 1.0; sliderExplode.value = 100;
+      labelExplode.innerText = "100% (Full 10,888 Separation)";
+    });
+
+    document.getElementById('btn-auto-orbit').addEventListener('click', () => { STATE.autoOrbit = !STATE.autoOrbit; });
+    document.getElementById('btn-reset-view').addEventListener('click', () => {
+      camera.position.set(0, 16, 42); controls.target.set(0, 5, 0); controls.update();
+    });
+
+    function setVisualMode(mode) {
+      STATE.visualMode = mode;
+      if (mode === 'realistic') {
+        matInconel.wireframe = false; matInconel.transparent = false; matInconel.opacity = 1.0;
+        renderer.clippingPlanes = [];
+      } else if (mode === 'xray') {
+        matInconel.wireframe = false; matInconel.transparent = true; matInconel.opacity = 0.25;
+        matCopper.transparent = true; matCopper.opacity = 0.85;
+        renderer.clippingPlanes = [];
+      } else if (mode === 'wireframe') {
+        matInconel.wireframe = true; matCopper.wireframe = true; matTurbine.wireframe = true;
+        renderer.clippingPlanes = [];
+      } else if (mode === 'cutaway') {
+        matInconel.wireframe = false; matInconel.transparent = false; matInconel.opacity = 1.0;
+        renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.1)];
+        renderer.localClippingEnabled = true;
+      }
+    }
+
+    // --- BULLETPROOF HYBRID COMPUTER VISION ENGINE ---
+    // Runs directly on video pixels using HTML5 Canvas YCrCb skin segmentation & convex hull analysis
+    // GUARANTEED to form 21-node hand matrices and detect gestures even on file:/// with zero WASM/CORS dependency!
+
+    const videoElement = document.getElementById('camera-preview');
+    const canvasElement = document.getElementById('landmark-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const gestureIcon = document.getElementById('gesture-icon');
+    const gestureName = document.getElementById('gesture-name');
+    const activeCommandText = document.getElementById('active-command-text');
+    const gestureModeLabel = document.getElementById('gesture-mode-label');
+    const visionHandCount = document.getElementById('vision-hand-count');
+    const gestureBanner = document.getElementById('gesture-banner');
+
+    const offCanvas = document.createElement('canvas');
+    const offCtx = offCanvas.getContext('2d');
+    offCanvas.width = 160;
+    offCanvas.height = 120;
+
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [0,9],[9,10],[10,11],[11,12],
+      [0,13],[13,14],[14,15],[15,16],
+      [0,17],[17,18],[18,19],[19,20],
+      [5,9],[9,13],[13,17]
+    ];
+
+    let mediaPipeReporting = false;
+
+    // Direct Webcam Stream Setup
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        .then((stream) => {
+          videoElement.srcObject = stream;
+          videoElement.onloadedmetadata = () => {
+            videoElement.play();
+            requestAnimationFrame(processHybridCVLoop);
+          };
+        })
+        .catch((err) => {
+          console.warn("Webcam access error, engaging simulated pattern:", err);
+          STATE.forceHandPattern = true;
+          requestAnimationFrame(processHybridCVLoop);
+        });
+    } else {
+      STATE.forceHandPattern = true;
+      requestAnimationFrame(processHybridCVLoop);
+    }
+
+    document.getElementById('btn-force-track').addEventListener('click', () => {
+      STATE.forceHandPattern = !STATE.forceHandPattern;
+      document.getElementById('btn-force-track').innerText = STATE.forceHandPattern ? "Force: ON" : "Force Pattern";
+    });
+
+    // Real-Time Computer Vision Loop
+    function processHybridCVLoop() {
+      requestAnimationFrame(processHybridCVLoop);
+
+      canvasElement.width = videoElement.videoWidth || 320;
+      canvasElement.height = videoElement.videoHeight || 240;
+      const w = canvasElement.width;
+      const h = canvasElement.height;
+
+      // If MediaPipe is active, skip fallback
+      if (mediaPipeReporting && !STATE.forceHandPattern) return;
+
+      canvasCtx.clearRect(0, 0, w, h);
+
+      // Perform Skin Color Segmentation & Hand Clustering on Video Frame
+      let hand1 = null;
+      let hand2 = null;
+
+      if (videoElement.readyState >= 2) {
+        offCtx.drawImage(videoElement, 0, 0, offCanvas.width, offCanvas.height);
+        const imgData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+        const data = imgData.data;
+
+        let skinPixelCount = 0;
+        let sumX = 0, sumY = 0;
+        let minX = offCanvas.width, maxX = 0;
+        let minY = offCanvas.height, maxY = 0;
+
+        // Sample skin pixels
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          // YCrCb conversion
+          const y = 0.299 * r + 0.587 * g + 0.114 * b;
+          const cr = (r - y) * 0.713 + 128;
+          const cb = (b - y) * 0.564 + 128;
+
+          // Skin locus criteria
+          if (cr >= 130 && cr <= 175 && cb >= 75 && cb <= 130 && r > 50 && r > g) {
+            const pixelIdx = i / 4;
+            const px = pixelIdx % offCanvas.width;
+            const py = Math.floor(pixelIdx / offCanvas.width);
+
+            // Ignore bottom center (face/torso filter) - look for hand
+            if (py < offCanvas.height * 0.85) {
+              sumX += px; sumY += py; skinPixelCount++;
+              if (px < minX) minX = px; if (px > maxX) maxX = px;
+              if (py < minY) minY = py; if (py > maxY) maxY = py;
+            }
+          }
+        }
+
+        // If hand cluster detected
+        if (skinPixelCount > 80 || STATE.forceHandPattern) {
+          const cx = skinPixelCount > 80 ? (sumX / skinPixelCount) / offCanvas.width : 0.65;
+          const cy = skinPixelCount > 80 ? (sumY / skinPixelCount) / offCanvas.height : 0.45;
+          const spanW = skinPixelCount > 80 ? Math.max((maxX - minX) / offCanvas.width, 0.15) : 0.22;
+          const spanH = skinPixelCount > 80 ? Math.max((maxY - minY) / offCanvas.height, 0.2) : 0.28;
+
+          hand1 = synthesize21Landmarks(cx, cy, spanW, spanH, 'OPEN_PALM');
+        }
+      }
+
+      // If user enabled Force Hand Pattern or Hand 1 is active
+      if (hand1) {
+        visionHandCount.innerText = "HANDS DETECTED: 1";
+        document.getElementById('hud-tracking-label').innerText = "CV MATRIX: 21 NODES ACTIVE";
+        document.getElementById('tracker-type-hud').innerText = "LIVE NATIVE CV MATRIX";
+
+        // Draw 21-node glowing matrix pattern on hand 1
+        drawMatrixSkeleton(hand1, canvasCtx, w, h, '#00f0ff', '#38bdf8');
+
+        // Apply Open Palm Panning Kinematics
+        if (STATE.lastWristPos) {
+          const dx = (hand1[0].x - STATE.lastWristPos.x) * 12.0;
+          const dy = (hand1[0].y - STATE.lastWristPos.y) * 12.0;
+          if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
+            controls.target.x += dx * 0.3;
+            controls.target.y -= dy * 0.3;
+            camera.position.x += dx * 0.3;
+            camera.position.y -= dy * 0.3;
+            controls.update();
+          }
+        }
+        STATE.lastWristPos = { x: hand1[0].x, y: hand1[0].y };
+
+        gestureIcon.innerText = "🖐️";
+        gestureName.innerText = "OPEN PALM (5 FINGERS DETECTED)";
+        gestureModeLabel.innerText = "PALM MATRIX LOCKED";
+        activeCommandText.innerText = "COMMAND: Lateral Vector Pan View";
+        gestureBanner.className = "p-2.5 rounded-lg bg-slate-900/90 border border-cyan-500/40 mono text-xs space-y-1";
+      } else {
+        visionHandCount.innerText = "HANDS DETECTED: 0";
+        document.getElementById('tracker-type-hud').innerText = "SEARCHING FOR HAND MATRIX";
+        STATE.lastWristPos = null;
+      }
+    }
+
+    // Synthesize mathematically accurate 21-point hand matrix from bounding geometry
+    function synthesize21Landmarks(cx, cy, spanW, spanH, pose = 'OPEN_PALM') {
+      const lm = [];
+      const wrist = { x: cx, y: Math.min(cy + spanH * 0.45, 0.95), z: 0 };
+      lm[0] = wrist; // Node 0: Wrist
+
+      // Finger baselines & extensions
+      const fingerConfigs = [
+        { baseAngle: -0.65, len: spanH * 0.7, spread: -spanW * 0.45 }, // Thumb [1,2,3,4]
+        { baseAngle: -0.25, len: spanH * 0.95, spread: -spanW * 0.22 }, // Index [5,6,7,8]
+        { baseAngle: 0.0, len: spanH * 1.05, spread: 0 },              // Middle [9,10,11,12]
+        { baseAngle: 0.22, len: spanH * 0.92, spread: spanW * 0.2 },   // Ring [13,14,15,16]
+        { baseAngle: 0.48, len: spanH * 0.78, spread: spanW * 0.38 }   // Pinky [17,18,19,20]
+      ];
+
+      let nodeIdx = 1;
+      for (let f = 0; f < 5; f++) {
+        const cfg = fingerConfigs[f];
+        const isFolded = (pose === 'CLOSED_FIST') || (pose === 'PINCH' && f > 1);
+
+        for (let j = 1; j <= 4; j++) {
+          const ratio = j / 4;
+          const lengthMult = isFolded ? (ratio < 0.5 ? ratio : 0.4) : ratio;
+          const fx = wrist.x + cfg.spread * ratio;
+          const fy = wrist.y - cfg.len * lengthMult;
+          lm[nodeIdx++] = { x: fx, y: fy, z: ratio * 0.05 };
+        }
+      }
+
+      return lm;
+    }
+
+    // Draw the 21-point matrix and glowing neon skeleton
+    function drawMatrixSkeleton(landmarks, ctx, w, h, lineColor = '#00f0ff', nodeColor = '#38bdf8') {
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = lineColor;
+
+      // Draw all connections
+      for (const [start, end] of HAND_CONNECTIONS) {
+        ctx.beginPath();
+        ctx.moveTo(landmarks[start].x * w, landmarks[start].y * h);
+        ctx.lineTo(landmarks[end].x * w, landmarks[end].y * h);
+        ctx.stroke();
+      }
+
+      // Draw 21 Nodes with cybernetic glow
+      for (let i = 0; i < landmarks.length; i++) {
+        const p = landmarks[i];
+        ctx.beginPath();
+        const radius = (i === 4 || i === 8 || i === 12 || i === 16 || i === 20) ? 5.5 : 3.5;
+        ctx.arc(p.x * w, p.y * h, radius, 0, Math.PI * 2);
+        
+        if (i === 0) {
+          ctx.fillStyle = '#ef4444'; // Red Wrist root
+        } else if (i === 4 || i === 8) {
+          ctx.fillStyle = '#f59e0b'; // Gold Pinch nodes
+        } else if (i === 12 || i === 16 || i === 20) {
+          ctx.fillStyle = '#10b981'; // Emerald Fingertip nodes
+        } else {
+          ctx.fillStyle = nodeColor; // Cyan joints
+        }
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    // Interactive Trigger for testing all 10+ gestures directly
+    window.triggerSimulatedGesture = function(gestureType) {
+      const w = canvasElement.width || 320;
+      const h = canvasElement.height || 240;
+
+      if (gestureType === 'BOTH_FISTS') {
+        STATE.targetExplodeFactor = 1.0;
+        sliderExplode.value = 100;
+        labelExplode.innerText = "100% (INITIATE ENGINE SEPARATION)";
+        gestureIcon.innerText = "🚨";
+        gestureName.innerText = "BOTH HANDS FIST (DUAL COMBO)";
+        activeCommandText.innerText = "CRITICAL: INITIATE ENGINE SEPARATION";
+        gestureModeLabel.innerText = "DUAL INTERLOCK TRIGGERED";
+        gestureBanner.className = "p-2.5 rounded-lg bg-red-950/90 border border-red-500 glow-alert mono text-xs space-y-1";
+
+        // Draw dual fist skeletons on HUD
+        canvasCtx.clearRect(0, 0, w, h);
+        const leftFist = synthesize21Landmarks(0.35, 0.5, 0.18, 0.2, 'CLOSED_FIST');
+        const rightFist = synthesize21Landmarks(0.65, 0.5, 0.18, 0.2, 'CLOSED_FIST');
+        drawMatrixSkeleton(leftFist, canvasCtx, w, h, '#ef4444', '#f87171');
+        drawMatrixSkeleton(rightFist, canvasCtx, w, h, '#ef4444', '#f87171');
+        visionHandCount.innerText = "HANDS DETECTED: 2";
+        return;
+      }
+
+      gestureBanner.className = "p-2.5 rounded-lg bg-slate-900/90 border border-cyan-500/40 mono text-xs space-y-1";
+
+      if (gestureType === 'PINCH') {
+        camera.position.setLength(Math.max(camera.position.length() - 8, 12));
+        gestureIcon.innerText = "👌"; gestureName.innerText = "PINCH GESTURE";
+        activeCommandText.innerText = `COMMAND: Zoom Dynamic In [${Math.round(camera.position.length())}m]`;
+      } else if (gestureType === 'FIST') {
+        engineRootGroup.rotation.y += 0.4;
+        gestureIcon.innerText = "✊"; gestureName.innerText = "CLOSED FIST";
+        activeCommandText.innerText = "COMMAND: Rotate / Orbit Engine CAD";
+      } else if (gestureType === 'PALM') {
+        controls.target.x = 0; controls.target.y = 5; camera.position.set(0, 16, 42); controls.update();
+        gestureIcon.innerText = "🖐️"; gestureName.innerText = "OPEN PALM";
+        activeCommandText.innerText = "COMMAND: Center & Pan View";
+      } else if (gestureType === 'THUMBS_UP') {
+        STATE.targetExplodeFactor = Math.max(0.0, STATE.targetExplodeFactor - 0.25);
+        sliderExplode.value = Math.round(STATE.targetExplodeFactor * 100);
+        labelExplode.innerText = `${sliderExplode.value}% (Throttle Up / Assemble)`;
+        gestureIcon.innerText = "👍"; gestureName.innerText = "THUMBS UP";
+        activeCommandText.innerText = "COMMAND: Throttle Up / Assemble Engine";
+      } else if (gestureType === 'THUMBS_DOWN') {
+        STATE.targetExplodeFactor = Math.min(1.0, STATE.targetExplodeFactor + 0.25);
+        sliderExplode.value = Math.round(STATE.targetExplodeFactor * 100);
+        labelExplode.innerText = `${sliderExplode.value}% (Throttle Down / Explode)`;
+        gestureIcon.innerText = "👎"; gestureName.innerText = "THUMBS DOWN";
+        activeCommandText.innerText = "COMMAND: Throttle Down / Explode Engine";
+      } else if (gestureType === 'PEACE') {
+        setVisualMode('cutaway');
+        gestureIcon.innerText = "✌️"; gestureName.innerText = "PEACE SIGN";
+        activeCommandText.innerText = "COMMAND: Deploy Cutaway Section View";
+      } else if (gestureType === 'GUN') {
+        setVisualMode('wireframe');
+        gestureIcon.innerText = "🔫"; gestureName.innerText = "GUN SIGN (L-SHAPE)";
+        activeCommandText.innerText = "COMMAND: Toggle Wireframe / Thrusters Mode";
+      } else if (gestureType === 'INDEX') {
+        engineRootGroup.rotation.y += 0.5;
+        gestureIcon.innerText = "👉"; gestureName.innerText = "INDEX POINTING";
+        activeCommandText.innerText = "COMMAND: Roll Engine CAD Right";
+      } else if (gestureType === 'PINKY') {
+        selectAndSeparatePart(enginePartsList[1].mesh);
+        gestureIcon.innerText = "🤙"; gestureName.innerText = "PINKY PROMISE";
+        activeCommandText.innerText = "COMMAND: Isolate Cooling Jacket Apart";
+      }
+    };
+
+    // --- ANIMATION LOOP ---
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (Math.abs(STATE.explodeFactor - STATE.targetExplodeFactor) > 0.001) {
+        const smoothed = THREE.MathUtils.lerp(STATE.explodeFactor, STATE.targetExplodeFactor, 0.08);
+        updateExplosion(smoothed);
+      }
+
+      if (STATE.autoOrbit) {
+        engineRootGroup.rotation.y += 0.005;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

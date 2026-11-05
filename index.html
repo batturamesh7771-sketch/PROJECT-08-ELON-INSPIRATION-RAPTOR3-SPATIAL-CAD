@@ -1341,8 +1341,14 @@
           };
         })
         .catch((err) => {
-          console.warn("Webcam access error:", err);
-          visionHandCount.innerText = "CAMERA OFF / SIMULATION";
+          console.warn("Webcam access info:", err.name);
+          visionHandCount.innerText = "STANDBY: MOUSE / TOUCH";
+          const trackerLabel = document.getElementById('tracker-type-hud');
+          if (trackerLabel) trackerLabel.innerText = "CLICK GESTURE BUTTONS TO TEST";
+          const hudLabel = document.getElementById('hud-tracking-label');
+          if (hudLabel) hudLabel.innerText = "INTERACTIVE MODE: MOUSE / TOUCH ACTIVE";
+          const activeText = document.getElementById('active-command-text');
+          if (activeText) activeText.innerText = "Click any of the 14+ gesture buttons or drag with mouse to control engine";
         });
     }
 
